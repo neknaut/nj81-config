@@ -1,0 +1,12 @@
+{
+  "name": "nj81-config",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Edit the RGB lighting and screen of the Keydous NJ81 in the browser with WebHID.",
+  "type": "module",
+  "scripts": {
+    "start": "python3 -m http.server 8080 --directory public",
+    "test": "node --test"
+  },
+  "engines": { "node": ">=20" }
+}

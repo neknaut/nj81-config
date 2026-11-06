@@ -1,0 +1,136 @@
+<!doctype html>
+<html lang="vi">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>NJ81</title>
+  <meta name="description" content="Edit the RGB lighting and screen of the Keydous NJ81 in the browser with WebHID.">
+  <link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+  <header class="top">
+    <div>
+      <h1 data-i18n="title">NJ81</h1>
+      <p class="muted" data-i18n="subtitle"></p>
+    </div>
+    <div class="lang" role="group" aria-label="Language">
+      <button type="button" data-lang="vi" aria-pressed="true">VI</button>
+      <button type="button" data-lang="en" aria-pressed="false">EN</button>
+    </div>
+  </header>
+
+  <p id="unsupported" class="notice" hidden data-i18n="notSupported"></p>
+
+  <main class="grid">
+    <section class="card" aria-labelledby="h-conn">
+      <h2 id="h-conn" data-i18n="connection"></h2>
+      <div class="row">
+        <button id="connect" type="button" class="primary" data-i18n="connect"></button>
+        <button id="disconnect" type="button" data-i18n="disconnect" hidden></button>
+        <span id="status" class="chip off" data-i18n="status_off"></span>
+      </div>
+      <label class="check"><input id="simulation" type="checkbox" checked> <span data-i18n="simulation"></span></label>
+      <p class="muted small" data-i18n="connectionHelp"></p>
+      <p id="device-name" class="small" hidden></p>
+    </section>
+
+    <section class="card wide" aria-labelledby="h-light">
+      <h2 id="h-light" data-i18n="lighting"></h2>
+      <div class="controls">
+        <label>
+          <span data-i18n="effect"></span>
+          <select id="effect"></select>
+        </label>
+        <label>
+          <span data-i18n="color"></span>
+          <input id="color" type="color" value="#ff7a66">
+        </label>
+        <label>
+          <span><span data-i18n="brightness"></span>: <output id="brightness-out">80</output>%</span>
+          <input id="brightness" type="range" min="0" max="100" value="80">
+        </label>
+        <label>
+          <span><span data-i18n="speed"></span>: <output id="speed-out">50</output>%</span>
+          <input id="speed" type="range" min="0" max="100" value="50">
+        </label>
+      </div>
+      <div id="keyboard" class="keyboard" role="group" aria-label="Keyboard preview"></div>
+      <div class="row">
+        <p id="paint-help" class="muted small" data-i18n="paintHelp" hidden></p>
+        <button id="fill-all" type="button" data-i18n="fillAll" hidden></button>
+        <button id="clear-all" type="button" data-i18n="clearAll" hidden></button>
+      </div>
+      <p class="muted small" data-i18n="previewNote"></p>
+    </section>
+
+    <section class="card" aria-labelledby="h-screen">
+      <h2 id="h-screen" data-i18n="screen"></h2>
+      <div class="controls one">
+        <label>
+          <span data-i18n="screenSize"></span>
+          <span class="inline">
+            <input id="screen-w" type="number" min="8" max="512" value="128" aria-label="width">
+            <span>×</span>
+            <input id="screen-h" type="number" min="8" max="512" value="64" aria-label="height">
+          </span>
+        </label>
+        <label>
+          <span data-i18n="screenImage"></span>
+          <input id="screen-file" type="file" accept="image/*">
+        </label>
+      </div>
+      <canvas id="screen-canvas" class="screen" width="128" height="64"></canvas>
+      <div class="row"><button id="screen-export" type="button" data-i18n="exportRgb565"></button></div>
+      <p class="muted small" data-i18n="screenNote"></p>
+    </section>
+
+    <section class="card" aria-labelledby="h-profile">
+      <h2 id="h-profile" data-i18n="profile"></h2>
+      <label>
+        <span data-i18n="profileName"></span>
+        <input id="profile-name" type="text" maxlength="60" value="My profile">
+      </label>
+      <div class="row">
+        <button id="save-local" type="button" data-i18n="saveLocal"></button>
+        <select id="saved-list" aria-label="Saved profiles"></select>
+        <button id="load-local" type="button" data-i18n="load"></button>
+      </div>
+      <div class="row">
+        <button id="export-json" type="button" data-i18n="exportJson"></button>
+        <label class="file-button"><span data-i18n="importJson"></span><input id="import-json" type="file" accept="application/json,.json"></label>
+      </div>
+      <div class="row"><button id="apply" type="button" class="primary" data-i18n="apply"></button></div>
+    </section>
+
+    <details class="card wide" id="lab">
+      <summary><h2 data-i18n="lab"></h2></summary>
+      <p class="notice" data-i18n="labWarn"></p>
+      <h3 data-i18n="labDevice"></h3>
+      <pre id="lab-device" class="mono small">-</pre>
+      <label class="check"><input id="lab-enable" type="checkbox"> <span data-i18n="labEnable"></span></label>
+      <div class="controls lab-form">
+        <label><span data-i18n="labType"></span>
+          <select id="lab-kind"><option value="output">output</option><option value="feature">feature</option></select>
+        </label>
+        <label><span data-i18n="labReportId"></span><input id="lab-report" type="number" min="0" max="255" value="0"></label>
+        <label class="grow"><span data-i18n="labBytes"></span><input id="lab-bytes" type="text" class="mono" placeholder="00 01 02" autocomplete="off" spellcheck="false"></label>
+      </div>
+      <div class="row">
+        <button id="lab-send" type="button" disabled data-i18n="send"></button>
+        <button id="lab-read" type="button" disabled data-i18n="receive"></button>
+        <button id="lab-clear" type="button" data-i18n="clear"></button>
+      </div>
+      <h3 data-i18n="labIncoming"></h3>
+      <pre id="lab-log" class="mono small log">-</pre>
+    </details>
+
+    <section class="card wide" aria-labelledby="h-log">
+      <h2 id="h-log" data-i18n="log"></h2>
+      <pre id="log" class="mono small log" aria-live="polite"></pre>
+    </section>
+  </main>
+
+  <footer class="muted small" data-i18n="footer"></footer>
+  <script type="module" src="js/app.js"></script>
+</body>
+</html>

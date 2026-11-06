@@ -1,0 +1,6 @@
+node_modules/
+.DS_Store
+*.log
+# USB captures can contain device serial numbers: keep them out of git
+*.pcap
+*.pcapng
