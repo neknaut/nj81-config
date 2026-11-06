@@ -168,6 +168,8 @@ input[type="range"] { accent-color: var(--accent); }
 .gallery { display: grid; grid-template-columns: repeat(auto-fill, minmax(120px, 1fr)); gap: 8px; margin-top: 10px; }
 .thumb { display: grid; gap: 4px; padding: 6px; min-height: 0; font-size: 12px; font-weight: 600; }
 .thumb canvas { width: 100%; aspect-ratio: 2 / 1; image-rendering: pixelated; border-radius: 4px; background: #000; }
-.links { margin: 6px 0 0; padding-left: 18px; font-size: 13px; }
+.link-groups { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 14px; }
+.link-group h4 { margin: 0 0 4px; font-size: 13px; color: var(--muted); font-weight: 600; }
+.links { margin: 0; padding-left: 18px; font-size: 13px; line-height: 1.7; }
 .panel-head { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
 .small-btn { min-height: 34px; padding: 0 12px; font-size: 13px; background: transparent; }
