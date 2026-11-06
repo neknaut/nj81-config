@@ -340,6 +340,7 @@ const stopGif = () => {
 };
 
 const setScreenSource = (source, name) => {
+  $("screen-send").classList.add("pending");
   screenPixels = source;
   profile.screen.name = name;
   $("screen-name").textContent = `${name} · ${source.width}×${source.height} → ${profile.screen.width}×${profile.screen.height}`;
@@ -396,10 +397,32 @@ const updateScreenControls = () => {
   const screen = nj?.model?.screen;
   $("screen-device").hidden = !nj?.display;
   $("screen-connect-note").hidden = Boolean(nj?.display);
-  $("screen-device-note").hidden = !screen;
   for (const id of ["screen-slot-box", "screen-send"]) { $(id).hidden = !screen; }
-  $("screen-size-note").hidden = Boolean(screen);
+  $("screen-size-note").hidden = !screen?.assumed;
+  $("screen-device-note").hidden = !screen || screen.assumed;
   if (screen) { $("screen-slot").replaceChildren(...Array.from({ length: screen.slots }, (_, i) => new Option(String(i + 1), String(i)))); }
+  $("screen-slot-box").hidden = !screen || screen.slots < 2;
+  if (nj) { showLastPicture(); }
+};
+
+/* The keyboard cannot report the picture its screen shows, so the page remembers the last one it sent from this browser
+   (per keyboard model and slot) and shows it again on connect. */
+const pictureKey = (slot) => `nj81-config.picture.${nj?.deviceId ?? "none"}.${slot}`;
+const rememberPicture = (canvas, slot) => {
+  try { localStorage.setItem(pictureKey(slot), JSON.stringify({ url: canvas.toDataURL("image/png"), name: profile.screen.name, at: Date.now() })); } catch (error) { /* full or private */ }
+};
+const showLastPicture = async () => {
+  if (screenPixels) { return; }   // the user already picked one
+  let saved = null;
+  try { saved = JSON.parse(localStorage.getItem(pictureKey(Number($("screen-slot").value) || 0)) || "null"); } catch (error) { saved = null; }
+  if (!saved?.url) { $("screen-name").textContent = t("noPictureSent"); return; }
+  try {
+    const image = new Image();
+    image.src = saved.url;
+    await image.decode();
+    setScreenSource(await createImageBitmap(image), saved.name || "");
+    $("screen-name").textContent = `${t("lastPictureSent")} ${new Date(saved.at).toLocaleString()}${saved.name ? ` · ${saved.name}` : ""}`;
+  } catch (error) { /* a broken entry: nothing to show */ }
 };
 
 const sendPicture = async () => {
@@ -419,9 +442,11 @@ const sendPicture = async () => {
   try {
     await nj.client.uploadPicture(slot, pictureBytes(data, width, height), nj.model.screen, (done, total) => { bar.max = total; bar.value = done; });
     logOk("areaScreen", `${t("pictureSent")} ${slot + 1}`);
+    rememberPicture(canvas, slot);
   } catch (error) { logError("areaScreen", `${t("applyFailed")}: ${error.message}`); }
   $("screen-send").disabled = false;
   bar.hidden = true;
+  $("screen-send").classList.remove("pending");
 };
 
 /* A text box keeps its keys; everywhere else the page swallows them while you try the keyboard. */
@@ -592,6 +617,9 @@ const detectNj81 = async () => {
     logOk("areaConn", `${t("familyDetected")}: ${family}`);
   }
   const display = Boolean(model.screen) || await client.hasDisplay().catch(() => false);
+  // A display whose size is not on file (NJ81-ED): the NJ81 family uses a 0.96" 160x80 panel, so pictures go out at that
+  // size, into the first picture only. The keyboard must answer the announce as ready before anything is sent.
+  if (display && !model.screen) { model = { ...model, screen: { width: 160, height: 80, slots: 1, assumed: true } }; }
   nj = { client, ...id, model, display };
   setControlsEnabled(true);
   try {
@@ -892,6 +920,7 @@ const init = () => {
   window.addEventListener("blur", () => { for (const el of keyEls.values()) { el.classList.remove("down"); } });
   $("screen-fit").addEventListener("change", (event) => { drawScreen(); event.target.blur(); });
   $("gif-play").addEventListener("click", () => playGif(!gif?.playing));
+  $("screen-slot").addEventListener("change", () => { screenPixels = null; showLastPicture(); });
   $("gif-frame").addEventListener("input", (event) => { if (gif) { playGif(false); showGifFrame(Number(event.target.value)); } });
   buildGallery();
   $("hide-mode").addEventListener("click", () => { const mode = Number($("effect").value); if (mode !== OFF) { hideMode(mode); } });

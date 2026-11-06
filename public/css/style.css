@@ -161,7 +161,10 @@ input[type="text"], select { font: inherit; color: var(--ink); background: var(-
 .screen.big { max-width: 560px; }
 progress { width: 100%; accent-color: var(--accent); }
 input[type="range"] { accent-color: var(--accent); }
-.gallery-box summary { cursor: pointer; font-weight: 700; }
+.gallery-box { border-top: 1px solid var(--line); padding-top: 14px; display: flex; flex-direction: column; gap: 8px; }
+.gallery-box h3 { font-size: 15px; }
+.apply-box { display: flex; flex-direction: column; gap: 8px; }
+#screen-send.pending { box-shadow: 0 0 0 3px rgba(143, 176, 255, 0.35); }
 .gallery { display: grid; grid-template-columns: repeat(auto-fill, minmax(120px, 1fr)); gap: 8px; margin-top: 10px; }
 .thumb { display: grid; gap: 4px; padding: 6px; min-height: 0; font-size: 12px; font-weight: 600; }
 .thumb canvas { width: 100%; aspect-ratio: 2 / 1; image-rendering: pixelated; border-radius: 4px; background: #000; }
