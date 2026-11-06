@@ -70,11 +70,27 @@ export const GALLERY = [
   } },
 ];
 
-/* Places to find more pictures and GIFs (they open in a new tab; download one, then choose it here). */
+/* Where to find pictures and GIFs for a 160x80 screen, grouped (they open in a new tab; download one, then choose it here).
+   Search pages are suggestions: check each picture's licence before using it. */
 export const LINKS = [
-  { name: "Keydous: tải về / downloads", url: "https://keydous.store/pages/downloads" },
-  { name: "GIPHY", url: "https://giphy.com/search/pixel-art" },
-  { name: "Tenor", url: "https://tenor.com/search/pixel-art-gifs" },
-  { name: "Pixabay GIF", url: "https://pixabay.com/gifs/search/pixel/" },
-  { name: "Lospec (pixel art)", url: "https://lospec.com/gallery" },
+  { group: "gifSearch", items: [
+    { name: "GIPHY · pixel art", url: "https://giphy.com/search/pixel-art" },
+    { name: "GIPHY · 8-bit", url: "https://giphy.com/search/8-bit" },
+    { name: "GIPHY · pixel cat", url: "https://giphy.com/search/pixel-cat" },
+    { name: "GIPHY · lofi pixel", url: "https://giphy.com/search/lofi-pixel" },
+    { name: "Tenor · pixel art", url: "https://tenor.com/search/pixel-art-gifs" },
+    { name: "Tenor · retro game", url: "https://tenor.com/search/retro-game-gifs" },
+    { name: "Pixabay · pixel GIFs", url: "https://pixabay.com/gifs/search/pixel/" },
+  ] },
+  { group: "pixelArt", items: [
+    { name: "Lospec gallery", url: "https://lospec.com/gallery" },
+    { name: "Pixilart gallery", url: "https://www.pixilart.com/gallery" },
+    { name: "itch.io · free pixel-art assets", url: "https://itch.io/game-assets/free/tag-pixel-art" },
+    { name: "OpenGameArt", url: "https://opengameart.org/" },
+  ] },
+  { group: "gifTools", items: [
+    { name: "ezgif · crop a GIF", url: "https://ezgif.com/crop" },
+    { name: "ezgif · resize a GIF", url: "https://ezgif.com/resize" },
+    { name: "Keydous: tải về / downloads", url: "https://keydous.store/pages/downloads" },
+  ] },
 ];

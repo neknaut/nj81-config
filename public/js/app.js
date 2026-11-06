@@ -388,10 +388,20 @@ const buildGallery = () => {
     return button;
   });
   $("gallery").replaceChildren(...items);
-  $("gallery-links").replaceChildren(...LINKS.map((link) => {
-    const li = document.createElement("li");
-    li.append(Object.assign(document.createElement("a"), { href: link.url, textContent: link.name, target: "_blank", rel: "noopener noreferrer" }));
-    return li;
+  $("gallery-links").replaceChildren(...LINKS.map(({ group, items }) => {
+    const box = document.createElement("div");
+    box.className = "link-group";
+    const title = Object.assign(document.createElement("h4"), { textContent: t(group) });
+    title.dataset.i18n = group;
+    const list = document.createElement("ul");
+    list.className = "links";
+    list.append(...items.map((link) => {
+      const li = document.createElement("li");
+      li.append(Object.assign(document.createElement("a"), { href: link.url, textContent: link.name, target: "_blank", rel: "noopener noreferrer" }));
+      return li;
+    }));
+    box.append(title, list);
+    return box;
   }));
 };
 
@@ -426,6 +436,30 @@ const showLastPicture = async () => {
     setScreenSource(await createImageBitmap(image), saved.name || "");
     $("screen-name").textContent = `${t("lastPictureSent")} ${new Date(saved.at).toLocaleString()}${saved.name ? ` · ${saved.name}` : ""}`;
   } catch (error) { /* a broken entry: nothing to show */ }
+};
+
+/* Back to the default picture: in the page (preview) and, on request, on the keyboard (the built-in NJ81 picture goes to
+   the same slot). The keyboard's own factory picture cannot be brought back: the only command for that erases every
+   picture in its flash, which this app never sends. */
+const defaultPicture = () => {
+  const canvas = document.createElement("canvas");
+  canvas.width = 160;
+  canvas.height = 80;
+  GALLERY[0].draw(canvas.getContext("2d"), 160, 80);
+  return canvas;
+};
+const clearPicture = () => {
+  stopGif();
+  screenPixels = null;
+  profile.screen.name = "";
+  $("screen-name").textContent = t("pictureCleared");
+  $("screen-send").classList.remove("pending");
+  drawScreen();
+};
+const sendDefaultPicture = async () => {
+  stopGif();
+  setScreenSource(defaultPicture(), GALLERY[0].name);
+  await sendPicture();
 };
 
 const sendPicture = async () => {
@@ -826,8 +860,10 @@ const pushNj81 = async () => {
   while (njDirty && nj) {
     njDirty = false;
     const settings = njSettings();
+    const asked = Date.now();
     try {
       let { light, diffs } = await nj.client.writeLight(settings);
+      const sentAfter = Math.max(0, Math.round(nj.client.lastWriteAt - asked));   // waiting for the flash gap or a busy keyboard
       let retried = false;
       if (diffs.length && !njDirty) {   // not taken: send the same once more (a write can be dropped while the keyboard is busy)
         log(`${t("retrying")}: ${describeDiffs(diffs, settings.mode)}`, "info", "areaLight");
@@ -840,7 +876,8 @@ const pushNj81 = async () => {
       showStatus(settings, light, diffs);
       const typing = !settings.off && reactiveModes().has(settings.mode) ? ` · ${t("reactiveNote")}` : "";
       setConfirm(!diffs.length);
-      if (!diffs.length) { logOk("areaLight", `${t("applied")}${retried ? ` (${t("afterRetry")})` : ""}: ${describeNj(settings)}${typing}`); }
+      const timing = ` (${t("sentAfter")} ${sentAfter} ms, ${t("confirmedAfter")} ${Date.now() - asked} ms)`;
+      if (!diffs.length) { logOk("areaLight", `${t("applied")}${retried ? ` (${t("afterRetry")})` : ""}: ${describeNj(settings)}${typing}${timing}`); }
       else { logWarn("areaLight", `${t("notApplied")} ${settings.off ? t("lightsOff") : modeLabel(settings.mode)}: ${describeDiffs(diffs, settings.mode)}`); }
     } catch (error) { logError("areaLight", `${t("applyFailed")}: ${why(error)}`); }
   }
@@ -924,6 +961,8 @@ const init = () => {
   window.addEventListener("blur", () => { for (const el of keyEls.values()) { el.classList.remove("down"); } });
   $("screen-fit").addEventListener("change", (event) => { drawScreen(); event.target.blur(); });
   $("gif-play").addEventListener("click", () => playGif(!gif?.playing));
+  $("screen-clear").addEventListener("click", clearPicture);
+  $("screen-default").addEventListener("click", sendDefaultPicture);
   $("screen-slot").addEventListener("change", () => { screenPixels = null; showLastPicture(); });
   $("gif-frame").addEventListener("input", (event) => { if (gif) { playGif(false); showGifFrame(Number(event.target.value)); } });
   buildGallery();
