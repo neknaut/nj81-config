@@ -88,6 +88,17 @@
       </div>
       <canvas id="screen-canvas" class="screen" width="160" height="80" aria-label="Screen preview"></canvas>
       <p id="screen-name" class="muted small"></p>
+      <div id="gif-controls" class="row" hidden>
+        <button id="gif-play" type="button"></button>
+        <label class="inline grow"><span data-i18n="gifFrame"></span> <input id="gif-frame" type="range" min="0" max="0" value="0"> <output id="gif-frame-out"></output></label>
+        <p class="muted small" data-i18n="gifNote"></p>
+      </div>
+      <details class="gallery-box">
+        <summary data-i18n="gallery"></summary>
+        <div id="gallery" class="gallery"></div>
+        <p class="muted small" data-i18n="galleryMore"></p>
+        <ul id="gallery-links" class="links small"></ul>
+      </details>
       <div id="screen-device" hidden>
         <div class="row">
           <label id="screen-slot-box" class="inline"><span data-i18n="screenSlot"></span> <select id="screen-slot"></select></label>

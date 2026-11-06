@@ -78,3 +78,11 @@ progress { width: 100%; margin-top: 10px; }
 .key:focus, .key:focus-visible { outline: none; }
 .key.down:focus { outline: 2px solid #fff; outline-offset: -2px; }
 .inline > span { white-space: nowrap; }
+.gallery-box { margin-top: 12px; }
+.gallery-box summary { cursor: pointer; font-weight: 700; }
+.gallery { display: grid; grid-template-columns: repeat(auto-fill, minmax(110px, 1fr)); gap: 8px; margin-top: 10px; }
+.thumb { display: grid; gap: 4px; padding: 6px; font-size: 0.75rem; font-weight: 600; box-shadow: 1px 1px 0 var(--line); }
+.thumb canvas { width: 100%; aspect-ratio: 2 / 1; image-rendering: pixelated; border-radius: 4px; background: #000; }
+.links { margin: 6px 0 0; padding-left: 18px; }
+.links a { color: inherit; }
+.grow { flex: 1; }

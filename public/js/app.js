@@ -7,6 +7,7 @@ import { Nj81Driver, SimulationDriver, ViaDriver } from "./drivers.js";
 import { CHANNEL, RGB_EFFECTS, VIA, Via, previewEffectFor } from "./via.js";
 import { LEVELS, MODES, OFF, ROYUAN, Royuan, isOff, isWritable, modeInfo, pictureBytes } from "./royuan.js";
 import { hueSatToHex, rgbToHex } from "./util.js";
+import { GALLERY, LINKS } from "./gallery.js";
 import { languages, setLanguage, t } from "./i18n.js";
 
 const $ = (id) => document.getElementById(id);
@@ -233,16 +234,97 @@ const drawScreen = () => {
   }
 };
 
+/* ---------- GIFs: every frame is decoded and played in the preview; the frame on show is the one sent ---------- */
+const GIF_MAX_FRAMES = 150;
+let gif = null;   // { frames: [{ bitmap, ms }], index, timer, playing }
+
+const decodeAnimation = async (file) => {
+  if (!("ImageDecoder" in window)) { return null; }   // older browsers: first frame only
+  const decoder = new ImageDecoder({ data: await file.arrayBuffer(), type: file.type });
+  await decoder.tracks.ready;
+  const count = Math.min(decoder.tracks.selectedTrack.frameCount, GIF_MAX_FRAMES);
+  if (count < 2) { decoder.close(); return null; }
+  const frames = [];
+  for (let frameIndex = 0; frameIndex < count; frameIndex += 1) {
+    const { image } = await decoder.decode({ frameIndex });
+    frames.push({ bitmap: await createImageBitmap(image), ms: Math.max(20, (image.duration ?? 100000) / 1000) });
+    image.close();
+  }
+  decoder.close();
+  return frames;
+};
+
+const showGifFrame = (index) => {
+  gif.index = index;
+  screenPixels = gif.frames[index].bitmap;
+  $("gif-frame").value = String(index);
+  $("gif-frame-out").textContent = `${index + 1}/${gif.frames.length}`;
+  drawScreen();
+};
+const playGif = (on) => {
+  if (!gif) { return; }
+  clearTimeout(gif.timer);
+  gif.playing = on;
+  $("gif-play").textContent = t(on ? "gifPause" : "gifPlay");
+  const step = () => { showGifFrame((gif.index + 1) % gif.frames.length); gif.timer = setTimeout(step, gif.frames[gif.index].ms); };
+  if (on) { gif.timer = setTimeout(step, gif.frames[gif.index].ms); }
+};
+const stopGif = () => {
+  if (gif) { clearTimeout(gif.timer); }
+  gif = null;
+  $("gif-controls").hidden = true;
+};
+
+const setScreenSource = (source, name) => {
+  screenPixels = source;
+  profile.screen.name = name;
+  $("screen-name").textContent = `${name} · ${source.width}×${source.height} → ${profile.screen.width}×${profile.screen.height}`;
+  drawScreen();
+};
+
 const onScreenFile = async (event) => {
   const [file] = event.target.files;
   if (!file) { return; }
+  stopGif();
   try {
-    screenPixels = await createImageBitmap(file);
-    profile.screen.name = file.name;
-    $("screen-name").textContent = `${file.name} · ${screenPixels.width}×${screenPixels.height} → ${profile.screen.width}×${profile.screen.height}`;
-    drawScreen();
-    log(`${t("screenImage")}: ${file.name} (${screenPixels.width}×${screenPixels.height})`);
+    const frames = file.type === "image/gif" || file.type === "image/webp" || file.type === "image/png" ? await decodeAnimation(file).catch(() => null) : null;
+    if (frames) {
+      gif = { frames, index: 0, timer: null, playing: false };
+      $("gif-frame").max = String(frames.length - 1);
+      $("gif-controls").hidden = false;
+      setScreenSource(frames[0].bitmap, file.name);
+      showGifFrame(0);
+      playGif(true);
+      log(`${t("screenImage")}: ${file.name} (GIF, ${frames.length} ${t("gifFrames")})`);
+    } else {
+      setScreenSource(await createImageBitmap(file), file.name);
+      log(`${t("screenImage")}: ${file.name} (${screenPixels.width}×${screenPixels.height})`);
+    }
   } catch (error) { log(`${t("importFailed")}: ${error.message}`); }
+  event.target.value = "";
+};
+
+/* ---------- built-in pictures ---------- */
+const buildGallery = () => {
+  const items = GALLERY.map((item) => {
+    const canvas = document.createElement("canvas");
+    canvas.width = 160;
+    canvas.height = 80;
+    item.draw(canvas.getContext("2d"), 160, 80);
+    const button = document.createElement("button");
+    button.type = "button";
+    button.className = "thumb";
+    button.title = item.name;
+    button.append(canvas, Object.assign(document.createElement("span"), { textContent: item.name }));
+    button.addEventListener("click", () => { stopGif(); setScreenSource(canvas, item.name); });
+    return button;
+  });
+  $("gallery").replaceChildren(...items);
+  $("gallery-links").replaceChildren(...LINKS.map((link) => {
+    const li = document.createElement("li");
+    li.append(Object.assign(document.createElement("a"), { href: link.url, textContent: link.name, target: "_blank", rel: "noopener noreferrer" }));
+    return li;
+  }));
 };
 
 /* With a NJ81 connected the screen is fixed at its real size and pictures can be sent into one of its slots. */
@@ -265,6 +347,7 @@ const sendPicture = async () => {
   drawScreen();
   const canvas = $("screen-canvas");
   const { data } = canvas.getContext("2d", { willReadFrequently: true }).getImageData(0, 0, width, height);
+  playGif(false);   // send the frame on show, and keep it on show
   const slot = Number($("screen-slot").value);
   const bar = $("screen-progress");
   bar.hidden = false;
@@ -582,6 +665,9 @@ const init = () => {
   window.addEventListener("keyup", (event) => showKey(event.code, false));
   window.addEventListener("blur", () => { for (const el of keyEls.values()) { el.classList.remove("down"); } });
   $("screen-fit").addEventListener("change", (event) => { drawScreen(); event.target.blur(); });
+  $("gif-play").addEventListener("click", () => playGif(!gif?.playing));
+  $("gif-frame").addEventListener("input", (event) => { if (gif) { playGif(false); showGifFrame(Number(event.target.value)); } });
+  buildGallery();
   $("hide-mode").addEventListener("click", () => { const mode = Number($("effect").value); if (modeInfo(mode)) { hideMode(mode); } });
   $("show-modes").addEventListener("click", () => { setHiddenModes(new Set()); const keep = $("effect").value; fillEffectOptions(); $("effect").value = keep; refreshOptionControl(); });  $("screen-file").addEventListener("change", onScreenFile);
   $("fill-all").addEventListener("click", () => { for (const key of KEYS) { profile.lighting.perKey[key.id] = $("color").value.toLowerCase(); } });

@@ -24,6 +24,7 @@ A web app to edit the **RGB lighting and the screen** of the Keydous NJ81 keyboa
 - **Lighting:** effect, colour, brightness, speed and per-key painting, with an animated preview (an approximation of a 75% layout).
 - **Screen:** pick an image, see it at the display's size and export it as raw RGB565 (the real size and the way to send it still have to be confirmed).
 - **Profiles:** save in the browser, export and import as JSON.
+- **Screen pictures:** a built-in picture library drawn for 160×80, links to GIF libraries, GIFs played in the preview (the frame on show is sent; animated upload is not supported yet).
 - **Live key presses:** keys typed on the real keyboard light up on an NJ81-shaped drawing (80 keys, screen top right).
 - **Vietnamese and English.**
 
