@@ -265,3 +265,20 @@ test("an NJ81-ED that is off lights up with the first write, before the new effe
   const writes = state.sent.filter((p) => p[0] === 0x06 || p[0] === 0x07).map((p) => p[0]);
   assert.deepEqual(writes, [0x06, 0x07], "lights on first, then the effect");
 });
+
+test("a busy keyboard: HID transfers are retried before giving up", async () => {
+  const { HidSession } = await import("../public/js/hid.js");
+  const session = new HidSession();
+  let sends = 0;
+  let reads = 0;
+  session.device = {
+    async sendFeatureReport() { sends += 1; if (sends < 3) { throw new Error("Failed to write the feature report."); } },
+    async receiveFeatureReport() { reads += 1; if (reads < 2) { throw new Error("Failed to receive the feature report."); } return new DataView(new Uint8Array(64).fill(7).buffer); },
+  };
+  const transport = session.featureTransport(64, [0, 1, 1, 1]);
+  await transport.setFeature(new Uint8Array(64));
+  assert.equal(sends, 3);
+  assert.equal((await transport.getFeature())[0], 7);
+  session.device.sendFeatureReport = async () => { throw new Error("Failed to write the feature report."); };
+  await assert.rejects(() => transport.setFeature(new Uint8Array(64)), (error) => error.busy === true && error.attempts === 4);
+});

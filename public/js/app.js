@@ -53,6 +53,8 @@ const log = (message, level = "info", area = "") => {
   }
 };
 const logOk = (area, message) => log(message, "ok", area);
+/* WebHID's own messages ("Failed to write the feature report") say little: name the likely cause. */
+const why = (error) => (error?.busy ? `${t("hidBusy")} (${error.attempts}×: ${error.message})` : error?.message ?? String(error));
 const logWarn = (area, message) => log(message, "warn", area);
 const logError = (area, message) => log(message, "error", area);
 
@@ -444,7 +446,7 @@ const sendPicture = async () => {
     await nj.client.uploadPicture(slot, pictureBytes(data, width, height), nj.model.screen, (done, total) => { bar.max = total; bar.value = done; });
     logOk("areaScreen", `${t("pictureSent")} ${slot + 1}`);
     rememberPicture(canvas, slot);
-  } catch (error) { logError("areaScreen", `${t("applyFailed")}: ${error.message}`); }
+  } catch (error) { logError("areaScreen", `${t("applyFailed")}: ${why(error)}`); }
   $("screen-send").disabled = false;
   bar.hidden = true;
   $("screen-send").classList.remove("pending");
@@ -540,7 +542,7 @@ const connect = async (filters) => {
     const device = await session.request(filters);
     if (device) { setAutoConnect(true); }
     if (!device) { logWarn("areaConn", t("noDevicePicked")); }
-  } catch (error) { logError("areaConn", `${t("applyFailed")}: ${error.message}`); }
+  } catch (error) { logError("areaConn", `${t("applyFailed")}: ${why(error)}`); }
 };
 
 /* Effects this keyboard does not run (it did not keep them, or the user hid them), remembered per keyboard model. */
@@ -635,7 +637,7 @@ const detectNj81 = async () => {
     info.textContent += ` · profile ${active === null ? "?" : active + 1}`;
     logOk("areaConn", `${t("viaReady")}: ${info.textContent}`);
     logOk("areaLight", `${t("lightNow")}: ${describeNj(light)}`);
-  } catch (error) { logError("areaLight", `${t("applyFailed")}: ${error.message}`); }
+  } catch (error) { logError("areaLight", `${t("applyFailed")}: ${why(error)}`); }
   if (nj.client.family !== "gen2") { const known = board(); if (known.family !== nj.client.family) { known.family = nj.client.family; saveBoard(known); } }
   startWatching();
   // like the official driver, the clock is set on every connect, but a little later: it is a flash write too, and the
@@ -680,7 +682,7 @@ const syncClock = async () => {
     const zone = Intl.DateTimeFormat().resolvedOptions().timeZone;
     const drift = Math.round(clockOffsetMs / 1000);
     logOk("areaClock", `${t("clockSent")}: ${standardNow().toLocaleString()} (${zone}${fromServer ? `, ${t("clockStandard")}${drift ? `, ${t("clockDrift")} ${drift}s` : ""}` : ""})`);
-  } catch (error) { logError("areaClock", `${t("applyFailed")}: ${error.message}`); }
+  } catch (error) { logError("areaClock", `${t("applyFailed")}: ${why(error)}`); }
   clockBusy = false;
   clockDoneAt = Date.now();
 };
@@ -707,7 +709,7 @@ const startWatching = () => {
   clearTimeout(watchTimer);
   const tick = async () => {
     if (!nj) { return; }
-    if (!njBusy && !njDirty && Date.now() - lastLocalChange > 2500) {
+    if (!njBusy && !njDirty && Date.now() - lastLocalChange > 3000) {
       try {
         const light = await nj.client.readLight();
         if (JSON.stringify(light) !== lastBoardLight && nj) {
@@ -719,7 +721,7 @@ const startWatching = () => {
         }
       } catch (error) { /* unplugged or busy: try again next time */ }
     }
-    watchTimer = setTimeout(tick, learning ? 600 : 1500);
+    watchTimer = setTimeout(tick, learning ? 700 : 2500);
   };
   watchTimer = setTimeout(tick, 1500);
 };
@@ -840,7 +842,7 @@ const pushNj81 = async () => {
       setConfirm(!diffs.length);
       if (!diffs.length) { logOk("areaLight", `${t("applied")}${retried ? ` (${t("afterRetry")})` : ""}: ${describeNj(settings)}${typing}`); }
       else { logWarn("areaLight", `${t("notApplied")} ${settings.off ? t("lightsOff") : modeLabel(settings.mode)}: ${describeDiffs(diffs, settings.mode)}`); }
-    } catch (error) { logError("areaLight", `${t("applyFailed")}: ${error.message}`); }
+    } catch (error) { logError("areaLight", `${t("applyFailed")}: ${why(error)}`); }
   }
   njBusy = false;
 };
