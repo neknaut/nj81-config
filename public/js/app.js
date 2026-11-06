@@ -339,6 +339,9 @@ const detectNj81 = async () => {
     info.textContent += ` · profile ${active === null ? "?" : active + 1} · ${mode} · ${light.rainbow ? "rainbow" : light.color} · brightness ${light.brightness}/4 · speed ${light.speed}/4`;
     log(`${t("viaReady")}: ${info.textContent}`);
   } catch (error) { log(`${t("applyFailed")}: ${error.message}`); }
+  if (id.model.screen) {   // like the official driver: set the screen's clock to this computer's local time on every connect
+    try { const now = new Date(); await client.setClock(now); log(`${t("clockSent")}: ${now.toLocaleString()}`); } catch (error) { log(`${t("applyFailed")}: ${error.message}`); }
+  }
   updateScreenControls();
   return true;
 };
