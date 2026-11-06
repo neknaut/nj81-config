@@ -62,7 +62,7 @@ test("writing lighting is read back", async () => {
   const { transport } = fakeNj81();
   const nj = new Royuan(transport, fast);
   const back = await nj.writeLight({ mode: 12, speed: 1, brightness: 4, option: 1, color: "#00ff00" });
-  assert.deepEqual(back, { kept: true, light: { mode: 12, speed: 1, brightness: 4, option: 1, rainbow: false, color: "#00ff00" } });
+  assert.deepEqual(back, { diffs: [], light: { mode: 12, speed: 1, brightness: 4, option: 1, rainbow: false, color: "#00ff00" } });
 });
 
 test("pictures are column-major big-endian RGB565, announced then sent in 56-byte pages", async () => {
@@ -178,11 +178,11 @@ test("an NJ81-ED is recognised as yc500 by reads only, and its lights can be swi
   assert.equal(await nj.profile(), 0);
 
   const on = await nj.writeLight({ mode: 4, speed: 4, brightness: 3, option: 1, color: "#0000ff", off: false });
-  assert.equal(on.kept, true);
+  assert.deepEqual(on.diffs, []);
   assert.deepEqual(state.light.slice(0, 4), [4, 1, 3, 0x17]);   // speed 4 goes out as 1 on yc500
   assert.equal(state.options, 0x00, "backlight-off bit cleared, Mac-mode bit not written back");
   const off = await nj.writeLight({ mode: 4, speed: 4, brightness: 3, option: 1, color: "#0000ff", off: true });
-  assert.equal(off.kept, true);
+  assert.deepEqual(off.diffs, []);
   assert.equal(state.options & 0x10, 0x10);
   assert.deepEqual(state.sent.filter((p) => p[0] === 0x06).map((p) => [...p.subarray(1, 5)]), [[0, 0x00, 1, 2], [0, 0x10, 1, 2]]);
 });
@@ -191,4 +191,23 @@ test("a board that fits neither family stays unknown", async () => {
   const { detectFamily } = await import("../public/js/royuan.js");
   const zero = new Uint8Array(64);
   assert.equal(detectFamily({ r89: zero, r8a: zero, r91: zero, r92: zero }), null);
+});
+
+test("a stale first read after a write is not taken for a refusal", async () => {
+  const { transport, state } = fakeNj81();
+  let reads = 0;
+  const stale = transport.getFeature;
+  transport.getFeature = async () => { reads += 1; const r = await stale(); return reads === 1 && r[0] === 0x87 ? Uint8Array.from([0x87, 9, 0, 0, 7, 0, 0, 0, ...new Uint8Array(56)]) : r; };
+  const nj = new Royuan(transport, fast);
+  const { diffs } = await nj.writeLight({ mode: 2, speed: 1, brightness: 3, color: "#0000ff" });
+  assert.deepEqual(diffs, []);
+  assert.deepEqual(state.light.slice(0, 3), [2, 3, 3]);
+});
+
+test("differences name only the settings an effect has", async () => {
+  const { lightDifferences } = await import("../public/js/royuan.js");
+  const got = { mode: 1, speed: 0, brightness: 2, option: 0, rainbow: false, color: "#ff0000" };
+  assert.deepEqual(lightDifferences({ mode: 1, speed: 4, brightness: 2, color: "#ff0000" }, got), []);   // Static has no speed
+  assert.deepEqual(lightDifferences({ mode: 1, speed: 4, brightness: 4, color: "#00ff00" }, got).map((d) => d.field), ["brightness", "color"]);
+  assert.deepEqual(lightDifferences({ off: true }, got).map((d) => d.field), ["off"]);
 });

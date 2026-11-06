@@ -667,20 +667,46 @@ let njBusy = false;
 let njDirty = false;
 const describeNj = (s) => s.off || s.brightness === 0 ? t("lightsOff")
   : `${modeLabel(s.mode)}${modeInfo(s.mode)?.options ? ` (${modeInfo(s.mode).options[s.option] ?? s.option})` : ""} · ${s.rainbow ? t("rainbowShort") : s.color} · ${t("brightness")} ${s.brightness}/${brightnessTop} · ${t("speed")} ${s.speed}/${LEVELS}`;
-/* Which settings the keyboard did not keep, in words. */
-const differences = (sent, got) => {
-  const out = [];
-  if (Boolean(sent.off) !== isOff(got)) { out.push(sent.off ? t("diffStillOn") : t("diffStillOff")); }
-  if (!sent.off) {
-    if (got.mode !== sent.mode) { out.push(`${t("effect")}: ${modeLabel(sent.mode)} → ${modeLabel(got.mode)}`); }
-    if (got.brightness !== sent.brightness) { out.push(`${t("brightness")}: ${sent.brightness} → ${got.brightness}`); }
-    if (got.speed !== sent.speed && !modeInfo(sent.mode)?.noSpeed) { out.push(`${t("speed")}: ${sent.speed} → ${got.speed}`); }
-    if (got.rainbow !== sent.rainbow) { out.push(`${t("rainbowShort")}: ${sent.rainbow} → ${got.rainbow}`); }
-    else if (!sent.rainbow && got.color.toLowerCase() !== sent.color.toLowerCase() && !(sent.color === "#ffffff" && got.color === "#ffffff")) { out.push(`${t("color")}: ${sent.color} → ${got.color}`); }
-    if (got.option !== sent.option && modeInfo(sent.mode)?.options) { out.push(`${t("direction")}: ${sent.option} → ${got.option}`); }
-  }
-  return out;
+/* A setting's value in words, for the log and the status table. */
+const FIELD_LABEL = { off: "fieldOff", mode: "effect", brightness: "brightness", speed: "speed", rainbow: "rainbowShort", color: "color", option: "direction" };
+const fieldValue = (field, value, mode) => {
+  if (field === "off" || field === "rainbow") { return t(value ? "yes" : "no"); }
+  if (field === "mode") { return modeLabel(value); }
+  if (field === "brightness") { return `${value}/${brightnessTop}`; }
+  if (field === "speed") { return `${value}/${LEVELS}`; }
+  if (field === "option") { return modeInfo(mode)?.options?.[value] ?? String(value); }
+  return String(value);
 };
+const describeDiffs = (diffs, mode) => diffs.map((d) => `${t(FIELD_LABEL[d.field])}: ${t("sentWord")} ${fieldValue(d.field, d.sent, mode)}, ${t("keptWord")} ${fieldValue(d.field, d.got, mode)}`).join(" · ");
+
+/* Per effect: how often it was taken or not, shown under the lighting controls. */
+const effectReport = new Map();
+const noteResult = (settings, diffs) => {
+  const key = settings.off ? OFF : settings.mode;
+  const entry = effectReport.get(key) ?? { ok: 0, bad: 0, issue: "" };
+  if (diffs.length) { entry.bad += 1; entry.issue = diffs.map((d) => t(FIELD_LABEL[d.field])).join(", "); } else { entry.ok += 1; }
+  effectReport.set(key, entry);
+};
+
+/* The status table: what the page asked for, what the keyboard reports, row by row. */
+const showStatus = (settings, light, diffs) => {
+  const wrong = new Set(diffs.map((d) => d.field));
+  const rows = (settings.off ? ["off"] : ["off", "mode", ...(modeInfo(settings.mode)?.options ? ["option"] : []), "color", "brightness", "speed"])
+    .filter((field) => !(field === "speed" && modeInfo(settings.mode)?.noSpeed) && !(field === "color" && (modeInfo(settings.mode)?.noColor || settings.rainbow)));
+  const cell = (text, cls = "") => Object.assign(document.createElement("td"), { textContent: text, className: cls });
+  const value = (source, field) => field === "off" ? (field in source ? source.off : isOff(source)) : source[field];
+  $("light-status-body").replaceChildren(...rows.map((field) => {
+    const tr = document.createElement("tr");
+    const ok = !wrong.has(field);
+    tr.append(cell(t(FIELD_LABEL[field])), cell(fieldValue(field, value(settings, field), settings.mode)),
+      cell(fieldValue(field, field === "off" ? isOff(light) : light[field], settings.mode)), cell(ok ? "✅" : "⚠️", ok ? "ok" : "bad"));
+    return tr;
+  }));
+  $("effect-report").textContent = [...effectReport].map(([mode, r]) =>
+    `${mode === OFF ? t("lightsOff") : modeLabel(mode)} ${r.bad ? `⚠️ (${r.issue})` : "✅"}`).join(" · ");
+  $("light-status").hidden = false;
+};
+
 const pushNj81 = async () => {
   njDirty = true;
   if (njBusy || !nj) { return; }
@@ -689,16 +715,19 @@ const pushNj81 = async () => {
     njDirty = false;
     const settings = njSettings();
     try {
-      const { light } = await nj.client.writeLight(settings);
-      const wrong = differences(settings, light);
+      let { light, diffs } = await nj.client.writeLight(settings);
+      let retried = false;
+      if (diffs.length && !njDirty) {   // not taken: send the same once more (a write can be dropped while the keyboard is busy)
+        log(`${t("retrying")}: ${describeDiffs(diffs, settings.mode)}`, "info", "areaLight");
+        ({ light, diffs } = await nj.client.writeLight(settings));
+        retried = true;
+      }
       lastBoardLight = JSON.stringify(light);
       noteSeen(light);
-      if (!wrong.length) { logOk("areaLight", `${t("applied")}: ${describeNj(settings)}`); }
-      else { logWarn("areaLight", `${t("notKept")}: ${wrong.join(" · ")}`); }
-      if (!settings.off && light.mode !== settings.mode && !board().done) {   // the keyboard refused this effect
-        logWarn("areaLight", `${t("modeRefused")}: ${modeLabel(settings.mode)}`);
-        hideMode(settings.mode);
-      }
+      noteResult(settings, diffs);
+      showStatus(settings, light, diffs);
+      if (!diffs.length) { logOk("areaLight", `${t("applied")}${retried ? ` (${t("afterRetry")})` : ""}: ${describeNj(settings)}`); }
+      else { logWarn("areaLight", `${t("notApplied")} ${settings.off ? t("lightsOff") : modeLabel(settings.mode)}: ${describeDiffs(diffs, settings.mode)}`); }
     } catch (error) { logError("areaLight", `${t("applyFailed")}: ${error.message}`); }
   }
   njBusy = false;

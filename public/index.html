@@ -71,6 +71,13 @@
         <button id="hide-mode" type="button" data-i18n="hideMode"></button>
         <button id="show-modes" type="button" data-i18n="showModes" hidden></button>
       </div>
+      <div id="light-status" hidden>
+        <table class="status small">
+          <thead><tr><th data-i18n="statusField"></th><th data-i18n="statusSent"></th><th data-i18n="statusKeyboard"></th><th></th></tr></thead>
+          <tbody id="light-status-body"></tbody>
+        </table>
+        <p class="small"><span data-i18n="effectsTried"></span>: <span id="effect-report">-</span></p>
+      </div>
       <div id="learn-box" class="notice" hidden>
         <p data-i18n="learnHelp"></p>
         <p class="small"><span data-i18n="learnSeen"></span>: <span id="learn-seen">-</span></p>

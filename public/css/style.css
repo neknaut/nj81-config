@@ -113,3 +113,6 @@ progress { width: 100%; margin-top: 10px; }
 .log-error { color: #c62828; font-weight: 700; }
 .log-kbd { color: #3a6ee8; }
 @media (prefers-color-scheme: dark) { .log-ok { color: #5fd38d; } .log-warn { color: #ffc46b; } .log-error { color: #ff7b7b; } .log-kbd { color: #8fb2ff; } }
+.status { border-collapse: collapse; margin-top: 10px; min-width: 320px; }
+.status th, .status td { border-bottom: 1px solid var(--soft); padding: 3px 10px 3px 0; text-align: left; }
+.status td.bad { font-weight: 700; }
