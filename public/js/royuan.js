@@ -22,14 +22,16 @@ export const MODELS = {
 export const modelFor = (deviceId) => MODELS[deviceId] ?? { name: `Unknown keyboard (id ${deviceId})`, family: "unknown" };
 export const isWritable = (model) => model.family === "gen2";
 
-/* The effects of the NJ81's lighting table, with their direction options. Mode 3 (spectrum) has no colour. */
+/* The NJ81's lighting table ("v" in the vendor's driver), in the manufacturer's order, with its direction options.
+   Static has no speed; Spectrum has no colour. `OFF` is the app's "lights off": the current effect at brightness 0. */
+export const OFF = 0;
 export const MODES = [
-  { mode: 1, name: "Static" }, { mode: 2, name: "Breathing" }, { mode: 3, name: "Spectrum", noColor: true },
-  { mode: 4, name: "Wave", options: ["Right", "Left", "Down", "Up"] }, { mode: 5, name: "Ripple" }, { mode: 6, name: "Stars" },
+  { mode: 4, name: "Wave", options: ["Right", "Left", "Down", "Up"] }, { mode: 5, name: "Ripple" }, { mode: 6, name: "Star dots" },
   { mode: 7, name: "Flow", options: ["Zigzag", "Spiral"] }, { mode: 8, name: "Key shadow" }, { mode: 9, name: "Layers" },
-  { mode: 10, name: "Sine" }, { mode: 11, name: "Spring", options: ["Outward", "Inward"] }, { mode: 12, name: "Neon", options: ["Right", "Left"] },
-  { mode: 14, name: "Radiant" }, { mode: 15, name: "Loop", options: ["CCW", "CW"] }, { mode: 16, name: "Colour grid" },
-  { mode: 17, name: "Snowfall" }, { mode: 18, name: "Meteor" }, { mode: 19, name: "Silent snow" },
+  { mode: 10, name: "Sine wave" }, { mode: 11, name: "Spring", options: ["Outward", "Inward"] }, { mode: 19, name: "Silent snow" },
+  { mode: 12, name: "Neon", options: ["Right", "Left"] }, { mode: 14, name: "Radiant" }, { mode: 15, name: "Loop", options: ["CCW", "CW"] },
+  { mode: 16, name: "Colour grid" }, { mode: 17, name: "Snowfall" }, { mode: 18, name: "Meteor" },
+  { mode: 1, name: "Static", noSpeed: true }, { mode: 2, name: "Breathing" }, { mode: 3, name: "Spectrum cycle", noColor: true },
 ];
 export const modeInfo = (mode) => MODES.find((entry) => entry.mode === mode);
 export const LEVELS = 4;   // brightness and speed are 0..4 on the keyboard
@@ -125,9 +127,16 @@ export const clockPacket = (date) => {
 /* ---------- client over a transport { setFeature(bytes64), getFeature() -> Uint8Array(64) } ---------- */
 const wait = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 
+/* Lighting and settings are stored in the keyboard's flash: writes closer than about a second are dropped or wedge it
+   (sharkfin measured a 1 s floor). Reads need a short settle before the reply is there. */
+export const TIMING = { writeGapMs: 1000, settleMs: 20, pageGapMs: 5, readyGapMs: 100 };
+
 export class Royuan {
   #queue = Promise.resolve();
-  constructor(transport, { sleep = wait, gapMs = 30 } = {}) { this.transport = transport; this.sleep = sleep; this.gapMs = gapMs; }
+  #lastWrite = -Infinity;
+  constructor(transport, { sleep = wait, now = () => Date.now(), timing = TIMING } = {}) {
+    this.transport = transport; this.sleep = sleep; this.now = now; this.timing = timing;
+  }
 
   #serial(task) {
     const result = this.#queue.then(task, task);
@@ -135,18 +144,24 @@ export class Royuan {
     return result;
   }
 
-  async #send(data) { await this.transport.setFeature(data); await this.sleep(this.gapMs); }
+  async #send(data) { await this.transport.setFeature(data); }
 
-  send(data) { return this.#serial(() => this.#send(data)); }
+  /* A write that changes flash: waits for the gap since the previous one. */
+  async #write(data) {
+    const waitMs = this.#lastWrite + this.timing.writeGapMs - this.now();
+    if (waitMs > 0) { await this.sleep(waitMs); }
+    await this.#send(typeof data === "function" ? data() : data);
+    this.#lastWrite = this.now();
+  }
 
   /* A GET: send the bare opcode, read until the reply echoes it. */
   get(op, payload = []) {
     return this.#serial(async () => {
       await this.#send(packet(op, payload));
-      for (let attempt = 0; attempt < 5; attempt += 1) {
+      for (let attempt = 1; attempt <= 5; attempt += 1) {
+        await this.sleep(this.timing.settleMs * attempt);
         const reply = await this.transport.getFeature();
         if (reply[0] === op && !reply.every((v) => v === 0xff)) { return reply; }
-        await this.sleep(40);
       }
       throw new RoyuanError(`The keyboard did not answer 0x${op.toString(16)} (use the USB cable and close the official driver)`);
     });
@@ -162,16 +177,19 @@ export class Royuan {
   async profile() { return (await this.get(OP.GET_PROFILE))[1]; }
   async readLight() { return decodeLight(await this.get(OP.GET_LIGHT)); }
 
-  /* Writes the lighting and reads it back; returns what the keyboard now reports. */
+  /* Writes the lighting and reads it back; `kept` says whether the keyboard reports exactly what was sent. */
   async writeLight(settings) {
     const data = encodeLight(settings);
-    await this.send(data);
+    await this.#serial(() => this.#write(data));
+    await this.sleep(150);
     const reply = await this.get(OP.GET_LIGHT);
-    if (!data.subarray(1, 8).every((v, i) => v === reply[1 + i])) { throw new RoyuanError("The keyboard did not keep the lighting change"); }
-    return decodeLight(reply);
+    return { kept: data.subarray(1, 8).every((v, i) => v === reply[1 + i]), light: decodeLight(reply) };
   }
 
-  setClock(date = new Date()) { return this.send(clockPacket(date)); }
+  /* `date` can be a function: it is then read at the moment the packet goes out, after any wait. */
+  setClock(date = () => new Date()) {
+    return this.#serial(() => this.#write(() => clockPacket(typeof date === "function" ? date() : date)));
+  }
 
   /* Uploads a still picture into slot 0..slots-1. `progress(done, total)` is called after each page. */
   async uploadPicture(slot, bytes, { width, height, slots }, progress = () => {}) {
@@ -181,10 +199,17 @@ export class Royuan {
     for (let attempt = 0; attempt < 10 && !ready; attempt += 1) {
       const reply = await this.get(OP.PICTURE_ANNOUNCE, [...pictureAnnounce(slot, bytes.length, width, height).subarray(1, 12)]);
       ready = reply[1] === 1;
-      if (!ready) { await this.sleep(100); }
+      if (!ready) { await this.sleep(this.timing.readyGapMs); }
     }
     if (!ready) { throw new RoyuanError("The screen did not accept the picture"); }
     const pages = picturePages(slot, bytes);
-    for (let i = 0; i < pages.length; i += 1) { await this.send(pages[i]); progress(i + 1, pages.length); }
+    for (let i = 0; i < pages.length; i += 1) {
+      await this.#serial(async () => { await this.#send(pages[i]); await this.sleep(this.timing.pageGapMs); });
+      progress(i + 1, pages.length);
+    }
+    this.#lastWrite = this.now();
   }
 }
+
+/* "Off" is shown when the keyboard reports brightness 0 (or effect 0). */
+export const isOff = (light) => light.brightness === 0 || light.mode === OFF;

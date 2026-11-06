@@ -5,7 +5,7 @@ import { keyColor } from "./lighting.js";
 import { HidSession, hex4, hidSupported } from "./hid.js";
 import { Nj81Driver, SimulationDriver, ViaDriver } from "./drivers.js";
 import { CHANNEL, RGB_EFFECTS, VIA, Via, previewEffectFor } from "./via.js";
-import { LEVELS, MODES, ROYUAN, Royuan, isWritable, modeInfo, pictureBytes } from "./royuan.js";
+import { LEVELS, MODES, OFF, ROYUAN, Royuan, isOff, isWritable, modeInfo, pictureBytes } from "./royuan.js";
 import { hueSatToHex, rgbToHex, rgbaToRgb565Bytes } from "./util.js";
 import { languages, setLanguage, t } from "./i18n.js";
 
@@ -31,9 +31,12 @@ const njSettings = () => ({
   option: profile.lighting.nj81?.option ?? 0,
   rainbow: profile.lighting.nj81?.rainbow ?? false,
   speed: toLevel(profile.lighting.speed),
-  brightness: toLevel(profile.lighting.brightness),
+  brightness: profile.lighting.nj81?.off ? 0 : toLevel(profile.lighting.brightness),   // "off" = the effect at brightness 0
   color: profile.lighting.color,
 });
+const njPreview = (nj81) => (nj81.off ? "off" : nj81.rainbow ? "spectrum" : PREVIEW_FOR_MODE[nj81.mode] ?? "static");
+let clockOffsetMs = 0;   // standard time minus this computer's clock
+const standardNow = () => new Date(Date.now() + clockOffsetMs);
 
 /* ---------- log ---------- */
 const log = (message) => {
@@ -61,10 +64,14 @@ const readForm = () => {
     name: $("profile-name").value,
     lighting: {
       ...profile.lighting, color: $("color").value, brightness: $("brightness").value, speed: $("speed").value,
-      ...(nj ? {
-        nj81: { mode: Number($("effect").value), option: Number($("light-option").value || 0), rainbow: $("rainbow").checked },
-        effect: $("rainbow").checked ? "spectrum" : PREVIEW_FOR_MODE[Number($("effect").value)] ?? "static",
-      } : via ? { viaEffect: Number($("effect").value), effect: previewEffectFor(Number($("effect").value)) } : { effect: $("effect").value }),
+      ...(nj ? (() => {
+        const chosen = Number($("effect").value);
+        const off = chosen === OFF || Number($("brightness").value) === 0;
+        const nj81 = chosen === OFF
+          ? { ...(profile.lighting.nj81 ?? { mode: 1, option: 0, rainbow: false }), off: true }
+          : { mode: chosen, option: Number($("light-option").value || 0), rainbow: $("rainbow").checked, off };
+        return { nj81, effect: njPreview(nj81) };
+      })() : via ? { viaEffect: Number($("effect").value), effect: previewEffectFor(Number($("effect").value)) } : { effect: $("effect").value }),
     },
     screen: { ...profile.screen, width: $("screen-w").value, height: $("screen-h").value },
   }).profile;
@@ -73,7 +80,7 @@ const readForm = () => {
 
 const writeForm = () => {
   $("profile-name").value = profile.name;
-  $("effect").value = nj ? String(profile.lighting.nj81?.mode ?? 1) : via ? String(profile.lighting.viaEffect ?? 1) : profile.lighting.effect;
+  $("effect").value = nj ? String(profile.lighting.nj81?.off ? OFF : profile.lighting.nj81?.mode ?? 1) : via ? String(profile.lighting.viaEffect ?? 1) : profile.lighting.effect;
   refreshOptionControl();
   $("light-option").value = String(profile.lighting.nj81?.option ?? 0);
   $("rainbow").checked = profile.lighting.nj81?.rainbow ?? false;
@@ -96,19 +103,25 @@ const updatePaintControls = () => {
 /* Direction choices and the rainbow switch only exist for the NJ81's own effects. */
 const refreshOptionControl = () => {
   const info = nj ? modeInfo(Number($("effect").value)) : null;
+  $("speed").disabled = Boolean(nj && (info?.noSpeed || Number($("effect").value) === OFF));
+  $("color").disabled = Boolean(nj && (info?.noColor || Number($("effect").value) === OFF));
   const options = info?.options ?? [];
   const keep = $("light-option").value;
   $("light-option").replaceChildren(...options.map((name, i) => new Option(name, String(i))));
   if (options.length) { $("light-option").value = options[Number(keep)] ? keep : "0"; }
   $("light-option-box").hidden = options.length === 0;
-  $("rainbow-box").hidden = !nj || Boolean(info?.noColor);
+  $("rainbow-box").hidden = !nj || !info || Boolean(info.noColor);
   for (const id of ["brightness", "speed"]) { $(id).step = nj ? String(100 / LEVELS) : "1"; }
 };
 
 const onFormChange = (event) => {
-  if (event?.target?.id === "effect") { refreshOptionControl(); }
+  if (event?.target?.id === "effect") {
+    refreshOptionControl();
+    // leaving "off": light the keyboard back up instead of sending the new effect at brightness 0
+    if (nj && Number($("effect").value) !== OFF && Number($("brightness").value) === 0) { $("brightness").value = 100; }
+  }
   readForm();
-  scheduleLive();
+  if (nj && profile.lighting.nj81?.off && Number($("effect").value) !== OFF) { $("effect").value = String(OFF); refreshOptionControl(); }
   $("brightness-out").textContent = profile.lighting.brightness;
   $("speed-out").textContent = profile.lighting.speed;
   updatePaintControls();
@@ -124,6 +137,8 @@ const buildKeyboard = () => {
   for (const key of KEYS) {
     const el = document.createElement("button");
     el.type = "button";
+    el.tabIndex = -1;   // clicking a key must not focus it (a focused key shows a ring when the keyboard is used)
+    el.addEventListener("mousedown", (event) => event.preventDefault());
     el.className = "key";
     el.textContent = key.label;
     el.title = key.label;
@@ -238,6 +253,10 @@ const sendPicture = async () => {
   bar.hidden = true;
 };
 
+/* A text box keeps its keys; everywhere else the page swallows them while you try the keyboard. */
+const isTyping = (el) => Boolean(el) && (el.isContentEditable || el.tagName === "TEXTAREA"
+  || (el.tagName === "INPUT" && ["text", "number", "search", "email", "url"].includes(el.type)));
+
 /* Keys pressed on the real keyboard (while this page has focus) light up on the drawing. */
 const showKey = (code, down) => {
   for (const key of KEYS) {
@@ -295,7 +314,7 @@ const connect = async (filters) => {
 
 /* ---------- reading what the keyboard is set to (VIA) ---------- */
 const fillEffectOptions = () => {
-  const options = nj ? MODES.map((m) => new Option(`${m.mode} · ${m.name}`, String(m.mode))) : via ? RGB_EFFECTS.map((effect) => new Option(effect.label, String(effect.id))) : EFFECTS.map((id) => new Option(t(`effect_${id}`), id));
+  const options = nj ? [new Option(t("lightsOff"), String(OFF)), ...MODES.map((m) => new Option(m.name, String(m.mode)))] : via ? RGB_EFFECTS.map((effect) => new Option(effect.label, String(effect.id))) : EFFECTS.map((id) => new Option(t(`effect_${id}`), id));
   $("effect").replaceChildren(...options);
 };
 
@@ -347,22 +366,43 @@ const detectNj81 = async () => {
     profile = validateProfile({
       ...profile,
       lighting: { ...profile.lighting, color: light.color, brightness: fromLevel(light.brightness), speed: fromLevel(light.speed),
-        nj81: { mode: modeInfo(light.mode) ? light.mode : 1, option: light.option, rainbow: light.rainbow },
-        effect: light.rainbow ? "spectrum" : PREVIEW_FOR_MODE[light.mode] ?? "static" },
+        nj81: { mode: modeInfo(light.mode) ? light.mode : 1, option: light.option, rainbow: light.rainbow, off: isOff(light) },
+        effect: njPreview({ ...light, off: isOff(light) }) },
       screen: { ...profile.screen, width: id.model.screen.width, height: id.model.screen.height },
     }).profile;
     fillEffectOptions();
     writeForm();
     $("simulation").checked = false;   // the keyboard answered: changes go to it for real
-    const mode = modeInfo(light.mode)?.name ?? `mode ${light.mode}`;
+    const mode = isOff(light) ? t("lightsOff") : modeInfo(light.mode)?.name ?? `mode ${light.mode}`;
     info.textContent += ` · profile ${active === null ? "?" : active + 1} · ${mode} · ${light.rainbow ? "rainbow" : light.color} · brightness ${light.brightness}/4 · speed ${light.speed}/4`;
     log(`${t("viaReady")}: ${info.textContent}`);
   } catch (error) { log(`${t("applyFailed")}: ${error.message}`); }
-  if (id.model.screen) {   // like the official driver: set the screen's clock to this computer's local time on every connect
-    try { const now = new Date(); await client.setClock(now); log(`${t("clockSent")}: ${now.toLocaleString()}`); } catch (error) { log(`${t("applyFailed")}: ${error.message}`); }
-  }
+  if (id.model.screen) { await syncClock(); }   // like the official driver: set the screen's clock on every connect
   updateScreenControls();
   return true;
+};
+
+/* Standard time: the web server's Date header (kept on time by the host), shown in this computer's time zone. */
+const measureClock = async () => {
+  try {
+    const start = Date.now();
+    const reply = await fetch(location.pathname, { method: "HEAD", cache: "no-store" });
+    const end = Date.now();
+    const server = Date.parse(reply.headers.get("date") || "");
+    if (Number.isFinite(server)) { clockOffsetMs = server + 500 - (start + end) / 2; return true; }   // the header is whole seconds
+  } catch (error) { /* offline: keep this computer's clock */ }
+  clockOffsetMs = 0;
+  return false;
+};
+
+const syncClock = async () => {
+  try {
+    const fromServer = await measureClock();
+    await nj.client.setClock(standardNow);
+    const zone = Intl.DateTimeFormat().resolvedOptions().timeZone;
+    const drift = Math.round(clockOffsetMs / 1000);
+    log(`${t("clockSent")}: ${standardNow().toLocaleString()} (${zone}${fromServer ? `, ${t("clockStandard")}${drift ? `, ${t("clockDrift")} ${drift}s` : ""}` : ""})`);
+  } catch (error) { log(`${t("applyFailed")}: ${error.message}`); }
 };
 
 const dropVia = () => {
@@ -386,7 +426,7 @@ session.addEventListener("disconnected", () => { setConnected(false); dropVia();
 /* ---------- apply ---------- */
 const apply = async () => {
   readForm();
-  if (nj && !$("simulation").checked) { await writeNj81(true); return; }
+  if (nj && !$("simulation").checked) { pushNj81(); return; }
   const driver = $("simulation").checked ? new SimulationDriver() : via ? new ViaDriver(via, viaChannel, true) : new Nj81Driver(session);
   try {
     const result = await driver.apply(profile, log);
@@ -396,15 +436,28 @@ const apply = async () => {
 
 /* Changes in the form reach a VIA keyboard right away (not saved in its memory until "Apply"). */
 let liveTimer = null;
-const writeNj81 = async (verbose) => {
-  try {
-    const back = await nj.client.writeLight(njSettings());
-    if (verbose) { log(`${t("applied")} (NJ81): ${JSON.stringify(back)}`); }
-  } catch (error) { log(`${t("applyFailed")}: ${error.message}`); }
+/* One write at a time, the latest settings win: the keyboard takes about one lighting write per second. */
+let njBusy = false;
+let njDirty = false;
+const describeNj = (s) => s.brightness === 0 ? t("lightsOff")
+  : `${modeInfo(s.mode)?.name ?? s.mode}${modeInfo(s.mode)?.options ? ` (${modeInfo(s.mode).options[s.option]})` : ""} · ${s.rainbow ? "rainbow" : s.color} · ${t("brightness")} ${s.brightness}/4 · ${t("speed")} ${s.speed}/4`;
+const pushNj81 = async () => {
+  njDirty = true;
+  if (njBusy || !nj) { return; }
+  njBusy = true;
+  while (njDirty && nj) {
+    njDirty = false;
+    const settings = njSettings();
+    try {
+      const { kept } = await nj.client.writeLight(settings);
+      log(kept ? `${t("applied")}: ${describeNj(settings)}` : `${t("notKept")}: ${describeNj(settings)}`);
+    } catch (error) { log(`${t("applyFailed")}: ${error.message}`); }
+  }
+  njBusy = false;
 };
 
 const scheduleLive = () => {
-  if (nj && !$("simulation").checked) { clearTimeout(liveTimer); liveTimer = setTimeout(() => writeNj81(false), 150); return; }
+  if (nj && !$("simulation").checked) { pushNj81(); return; }
   if (!via || $("simulation").checked) { return; }
   clearTimeout(liveTimer);
   liveTimer = setTimeout(async () => {
@@ -467,11 +520,19 @@ const init = () => {
   $("connect-other").addEventListener("click", () => connect([]));
   $("disconnect").addEventListener("click", () => session.close());
   for (const id of ["effect", "color", "brightness", "speed", "screen-w", "screen-h", "profile-name", "light-option", "rainbow"]) { $(id).addEventListener("input", onFormChange); }
+  // the keyboard gets a setting once it is chosen (slider released, colour picked), not on every step of a drag
+  for (const id of ["effect", "color", "brightness", "speed", "light-option", "rainbow"]) {
+    $(id).addEventListener("change", (event) => { scheduleLive(); if (event.target.tagName === "SELECT" || event.target.type === "range") { event.target.blur(); } });
+  }
+  // a mouse click must not leave the button focused, or the next key press on the keyboard would trigger it again
+  document.addEventListener("click", (event) => { if (event.detail > 0 && event.target.closest("button")) { event.target.closest("button").blur(); } });
   $("screen-send").addEventListener("click", sendPicture);
-  $("screen-clock").addEventListener("click", async () => {
-    try { await nj.client.setClock(new Date()); log(t("clockSent")); } catch (error) { log(`${t("applyFailed")}: ${error.message}`); }
+  $("screen-clock").addEventListener("click", () => { if (nj) { syncClock(); } });
+  window.addEventListener("keydown", (event) => {
+    showKey(event.code, true);
+    // outside a text box a key press only lights the drawing: no scrolling, no menu changes, no browser shortcuts (F11/F12 stay)
+    if (!isTyping(document.activeElement) && event.code !== "F11" && event.code !== "F12") { event.preventDefault(); }
   });
-  window.addEventListener("keydown", (event) => showKey(event.code, true));
   window.addEventListener("keyup", (event) => showKey(event.code, false));
   window.addEventListener("blur", () => { for (const el of keyEls.values()) { el.classList.remove("down"); } });
   $("screen-w").min = $("screen-h").min = SCREEN_LIMIT.min;
