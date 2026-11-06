@@ -8,10 +8,11 @@ A web app to edit the **RGB lighting and the screen** of the Keydous NJ81 keyboa
 ![Status](https://img.shields.io/badge/status-protocol%20unknown-orange)
 
 > [!IMPORTANT]
-> **The NJ81's HID protocol is not known yet.** The app already works as a lighting and screen editor with a live preview, saved
-> profiles and a safe **simulation mode**, and it contains a **protocol lab** to explore the keyboard. It cannot change the real
-> keyboard until the commands are captured from the official driver ([how](docs/capturing-usb.md)) and written into
-> [`public/js/protocol.js`](public/js/protocol.js). Until then the real driver refuses to send anything.
+> **VIA support (new).** If the NJ81's firmware speaks the open VIA/QMK protocol, *Connect* reads its current lighting (effect,
+> colour, brightness, speed), the effect dropdown lists the firmware's effects and every change is sent live; *Apply* also saves it
+> in the keyboard's memory. This is tested only against a simulated VIA keyboard, **not yet against a real NJ81**: if the keyboard
+> does not answer, the app says so and falls back to the simulation. The screen and any vendor-only features still need the
+> official driver's protocol ([how to capture it](docs/capturing-usb.md)).
 
 ## What it does
 

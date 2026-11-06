@@ -24,8 +24,8 @@ export const hex4 = (value) => "0x" + value.toString(16).padStart(4, "0");
 export class HidSession extends EventTarget {
   device = null;
 
-  async request() {
-    const [device] = await navigator.hid.requestDevice({ filters: [] });   // the browser shows its own device chooser
+  async request(filters = []) {
+    const [device] = await navigator.hid.requestDevice({ filters });   // the browser shows its own device chooser
     if (!device) { return null; }
     await this.use(device);
     return device;
@@ -41,7 +41,7 @@ export class HidSession extends EventTarget {
 
   onReport = (event) => {
     const data = new Uint8Array(event.data.buffer, event.data.byteOffset, event.data.byteLength);
-    this.dispatchEvent(new CustomEvent("report", { detail: { reportId: event.reportId, hex: bytesToHex(data), time: Date.now() } }));
+    this.dispatchEvent(new CustomEvent("report", { detail: { reportId: event.reportId, hex: bytesToHex(data), data, time: Date.now() } }));
   };
 
   async close() {
@@ -55,6 +55,18 @@ export class HidSession extends EventTarget {
   async send(kind, reportId, bytes) {
     if (!this.device) { throw new Error("No keyboard connected"); }
     if (kind === "feature") { await this.device.sendFeatureReport(reportId, bytes); } else { await this.device.sendReport(reportId, bytes); }
+  }
+
+  /* Sends one report and resolves with the next report the keyboard sends back (VIA style request / response). */
+  transact(bytes, timeoutMs = 1500) {
+    if (!this.device) { return Promise.reject(new Error("No keyboard connected")); }
+    return new Promise((resolve, reject) => {
+      const done = (fn, value) => { clearTimeout(timer); this.removeEventListener("report", onReply); fn(value); };
+      const onReply = (event) => done(resolve, Uint8Array.from(event.detail.data));
+      const timer = setTimeout(() => done(reject, new Error("The keyboard did not answer (no VIA support on this interface?)")), timeoutMs);
+      this.addEventListener("report", onReply);
+      this.device.sendReport(0, bytes).catch((error) => done(reject, error));
+    });
   }
 
   async readFeature(reportId) {

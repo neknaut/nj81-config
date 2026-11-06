@@ -30,6 +30,7 @@ export const validateProfile = (input) => {
     if (isHexColor(color)) { perKey[keyId] = color.toLowerCase(); } else { errors.push(`Bad colour for key ${keyId}`); }
   }
 
+  const viaEffect = Number.isInteger(lighting.viaEffect) && lighting.viaEffect >= 0 && lighting.viaEffect <= 255 ? lighting.viaEffect : undefined;
   const screen = input.screen && typeof input.screen === "object" ? input.screen : {};
   const profile = {
     schema: SCHEMA_VERSION,
@@ -40,6 +41,7 @@ export const validateProfile = (input) => {
       brightness: clamp(Math.round(asNumber(lighting.brightness, base.lighting.brightness)), 0, 100),
       speed: clamp(Math.round(asNumber(lighting.speed, base.lighting.speed)), 0, 100),
       perKey,
+      ...(viaEffect !== undefined ? { viaEffect } : {}),
     },
     screen: {
       width: clamp(Math.round(asNumber(screen.width, base.screen.width)), SCREEN_LIMIT.min, SCREEN_LIMIT.max),
