@@ -253,3 +253,13 @@ test("the NJ81-ED lists only the effects seen on it", async () => {
   const { modelFor } = await import("../public/js/royuan.js");
   assert.deepEqual(modelFor(873).modes, [4, 5, 6, 8, 9, 10, 11, 19, 12, 14, 16, 17, 18, 2, 3]);
 });
+
+test("an NJ81-ED that is off lights up with the first write, before the new effect is written", async () => {
+  const { transport, state } = fakeNj81Ed();   // starts with the backlight-off bit set
+  const nj = new Royuan(transport, fast);
+  nj.family = "yc500";
+  const { diffs } = await nj.writeLight({ mode: 4, speed: 2, brightness: 3, option: 0, color: "#00ff00", off: false });
+  assert.deepEqual(diffs, []);
+  const writes = state.sent.filter((p) => p[0] === 0x06 || p[0] === 0x07).map((p) => p[0]);
+  assert.deepEqual(writes, [0x06, 0x07], "lights on first, then the effect");
+});

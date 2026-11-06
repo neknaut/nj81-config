@@ -120,7 +120,7 @@ input[type="text"], select { font: inherit; color: var(--ink); background: var(-
 .mini-screen { border-top: 1px solid var(--line); padding-top: 14px; display: flex; flex-direction: column; gap: 10px; }
 
 /* ---------- keyboard drawing ---------- */
-.keyboard { position: relative; width: 100%; border-radius: 14px; padding: 14px; }
+.keyboard { position: relative; width: 100%; max-width: 940px; margin: 0 auto; border-radius: 14px; padding: 12px; }   /* not wider than a real look at it */
 .keyboard .keys { position: relative; width: 100%; }
 /* Each key is drawn like a real cap: a wide base (the sides) with a smaller top face set towards the back, the legend on
    the top face. --side and --top are the two shades; the light shows as a glow from under the cap. */

@@ -1,7 +1,7 @@
 # Capturing the official driver's USB traffic
 
-The NJ81 is not a VIA/QMK keyboard as far as we know, so its commands have to be learned from the official Keydous driver. This page
-shows how to record them. **You only record traffic between your own keyboard and your own PC.** Nothing here writes firmware.
+The NJ81's protocol is in `public/js/royuan.js`. For a model or a feature that is not on file yet (for example the NJ81-ED's
+screen), its commands can be learned from the official Keydous driver. This page shows how to record them. **You only record traffic between your own keyboard and your own PC.** Nothing here writes firmware.
 
 ## What you need
 
@@ -34,7 +34,7 @@ shows how to record them. **You only record traffic between your own keyboard an
 ## What to share
 
 Copy the frames of each change into [`protocol-notes.md`](protocol-notes.md) (hex bytes plus what you changed). With those notes the
-`js/protocol.js` encoder can be written and tested. Please **do not** record or share anything related to firmware updates.
+`public/js/royuan.js` support can be written and tested. Please **do not** record or share anything related to firmware updates.
 
 ## Bluetooth
 
