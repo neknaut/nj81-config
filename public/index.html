@@ -50,6 +50,7 @@
         <label id="color-box">
           <span data-i18n="color"></span>
           <input id="color" type="color" value="#ff7a66">
+          <span id="swatches" class="swatches" aria-label="Preset colours"></span>
         </label>
         <label id="brightness-box">
           <span><span data-i18n="brightness"></span>: <output id="brightness-out">80</output>%</span>
@@ -65,8 +66,15 @@
       </label>
       <label id="rainbow-box" class="check" hidden><input id="rainbow" type="checkbox"> <span data-i18n="rainbow"></span></label>
       <div id="mode-tools" class="row" hidden>
+        <button id="learn-start" type="button" class="primary" data-i18n="learnStart"></button>
+        <button id="rename-mode" type="button" data-i18n="renameMode"></button>
         <button id="hide-mode" type="button" data-i18n="hideMode"></button>
         <button id="show-modes" type="button" data-i18n="showModes" hidden></button>
+      </div>
+      <div id="learn-box" class="notice" hidden>
+        <p data-i18n="learnHelp"></p>
+        <p class="small"><span data-i18n="learnSeen"></span>: <span id="learn-seen">-</span></p>
+        <button id="learn-done" type="button" class="primary" data-i18n="learnFinish"></button>
       </div>
       <p class="muted small" data-i18n="typeHint"></p>
       <div id="keyboard" class="keyboard" role="group" aria-label="Keyboard preview"></div>
@@ -133,7 +141,7 @@
 
     <section class="card wide" aria-labelledby="h-log">
       <h2 id="h-log" data-i18n="log"></h2>
-      <pre id="log" class="mono small log" aria-live="polite"></pre>
+      <div id="log" class="mono small log" aria-live="polite"></div>
     </section>
   </main>
 

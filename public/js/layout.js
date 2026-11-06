@@ -20,7 +20,7 @@ const ROWS = [
   row(1 + GAP, [["`"], ...letters("1234567890-="), ["Bksp", 2], ["Del"]]),
   row(2 + GAP, [["Tab", 1.5], ...letters("QWERTYUIOP[]"), ["\\", 1.5], ["PgUp"]]),
   row(3 + GAP, [["Caps", 1.75], ...letters("ASDFGHJKL;'"), ["Enter", 2.25], ["PgDn"]]),
-  row(4 + GAP, [["Shift", 2.25], ...letters("ZXCVBNM,./"), ["Shift", 1.75], ["Up"], ["Home"]]),
+  row(4 + GAP, [["Shift", 2.25], ...letters("ZXCVBNM,./"), ["Shift", 1.75], ["Up"], ["End"]]),
   row(5 + GAP, [["Ctrl", 1.25], ["Win", 1.25], ["Alt", 1.25], ["Space", 6.25], ["Fn", 1.25], ["Ctrl", 1.25], ["Left", 1, 0.5], ["Down"], ["Right"]]),
 ];
 

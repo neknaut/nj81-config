@@ -103,10 +103,10 @@ test("the settings interface is picked among the keyboard's interfaces", async (
   assert.equal(pickInterface([]), null);
 });
 
-test("the NJ81 drawing has 80 keys, Home under PgDn and the screen top right", async () => {
+test("the NJ81 drawing has 80 keys, End under PgDn and the screen top right", async () => {
   const { KEYS, SCREEN_TILE, LAYOUT_WIDTH } = await import("../public/js/layout.js");
   assert.equal(KEYS.length, 80);
-  const home = KEYS.find((key) => key.label === "Home");
+  const home = KEYS.find((key) => key.label === "End");
   assert.equal(home.x + home.w, LAYOUT_WIDTH);
   assert.ok(KEYS.filter((key) => key.y === 0).every((key) => key.x + key.w <= SCREEN_TILE.x));
   assert.equal(SCREEN_TILE.x + SCREEN_TILE.w, LAYOUT_WIDTH);

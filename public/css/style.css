@@ -61,12 +61,13 @@ button:focus-visible, input:focus-visible, select:focus-visible, summary:focus-v
 /* black caps: the whole cap carries the light */
 .caps-black .key { background: var(--led); }
 /* white caps (the user's NJ81): cream caps with dark legends, the light only as a soft glow from under the cap */
-.keyboard.caps-white { background: #e9e6df; border-color: #bdb8ad; }
+/* toned down so the light stands out: grey-cream caps on a dark plate, a strong glow, caps tinted by the light */
+.keyboard.caps-white { background: #2a2826; border-color: #141312; }
 .caps-white .key {
-  background: #f7f5f0; color: #2b2a28; text-shadow: none; border: 1px solid #cfcac0;
-  box-shadow: 0 0 5px 1px color-mix(in srgb, var(--led) 55%, transparent), inset 0 -3px 0 #ddd8cd;
+  background: color-mix(in srgb, var(--led) 18%, #b9b4aa); color: #24221f; text-shadow: none; border: 1px solid #8f8a80;
+  box-shadow: 0 0 9px 2px color-mix(in srgb, var(--led) 90%, transparent), inset 0 -3px 0 #9d988e;
 }
-.caps-white .key.accent { background: #2f2f33; color: #f2f2f2; border-color: #1d1d20; box-shadow: 0 0 5px 1px color-mix(in srgb, var(--led) 55%, transparent), inset 0 -3px 0 #1c1c1f; }
+.caps-white .key.accent { background: color-mix(in srgb, var(--led) 12%, #2f2f33); color: #f2f2f2; border-color: #1d1d20; box-shadow: 0 0 9px 2px color-mix(in srgb, var(--led) 90%, transparent), inset 0 -3px 0 #1c1c1f; }
 .caps-white .key.down { outline-color: #ff7a66; }
 .caps-choice { max-width: 220px; margin-top: 10px; }
 .screen { width: 100%; max-width: 480px; aspect-ratio: 2 / 1; margin-top: 12px; image-rendering: pixelated; background: #000; border: 2px solid var(--line); border-radius: 8px; display: block; }
@@ -86,3 +87,11 @@ progress { width: 100%; margin-top: 10px; }
 .links { margin: 6px 0 0; padding-left: 18px; }
 .links a { color: inherit; }
 .grow { flex: 1; }
+.swatches { display: flex; gap: 6px; flex-wrap: wrap; margin-top: 6px; }
+.swatch { width: 26px; height: 26px; padding: 0; border-radius: 50%; box-shadow: 1px 1px 0 var(--line); }
+.log-line { padding: 1px 0; }
+.log-ok { color: #1f8a4c; }
+.log-warn { color: #a86400; font-weight: 700; }
+.log-error { color: #c62828; font-weight: 700; }
+.log-kbd { color: #3a6ee8; }
+@media (prefers-color-scheme: dark) { .log-ok { color: #5fd38d; } .log-warn { color: #ffc46b; } .log-error { color: #ff7b7b; } .log-kbd { color: #8fb2ff; } }

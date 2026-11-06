@@ -70,7 +70,9 @@ export const MODES = [
   { mode: 1, name: "Static", noSpeed: true }, { mode: 2, name: "Breathing" }, { mode: 3, name: "Spectrum cycle", noColor: true },
 ];
 export const modeInfo = (mode) => MODES.find((entry) => entry.mode === mode);
-export const LEVELS = 4;   // brightness and speed are 0..4 on the keyboard
+export const LEVELS = 4;   // speed is 0..4; brightness is 0..4 on most boards
+export const BRIGHTNESS_MAX = 15;   // some boards take more brightness steps: the app learns the top from what the board reports
+export const PRESET_COLOURS = ["#ff0000", "#ff8000", "#ffff00", "#00ff00", "#00ffff", "#0000ff", "#ff00ff", "#ffffff"];   // the firmware's own
 const PRESETS = ["#ff0000", "#ff8000", "#ffff00", "#00ff00", "#00ffff", "#0000ff", "#ff00ff"];
 const FIXED = 7;
 const RAINBOW = 8;
@@ -91,8 +93,8 @@ export const packet = (op, payload = [], bit8 = false) => {
 };
 
 /* ---------- lighting ---------- */
-const level = (value, name) => {
-  if (!Number.isInteger(value) || value < 0 || value > LEVELS) { throw new RoyuanError(`${name} must be 0-${LEVELS}`); }
+const level = (value, name, max = LEVELS) => {
+  if (!Number.isInteger(value) || value < 0 || value > max) { throw new RoyuanError(`${name} must be 0-${max}`); }
   return value;
 };
 const hexBytes = (hex) => {
@@ -106,7 +108,7 @@ export const encodeLight = ({ mode, speed, brightness, option = 0, rainbow = fal
   let rgb = hexBytes(color);
   if (rgb.every((v) => v === 0xff)) { rgb = [0xfa, 0xfa, 0xfa]; }   // the firmware wants pure white sent as FA FA FA
   const top = FAMILIES[family].speedTop;
-  return packet(OP.SET_LIGHT, [mode, top - level(speed, "speed"), level(brightness, "brightness"), (option << 4) | (rainbow ? RAINBOW : FIXED), ...rgb], true);
+  return packet(OP.SET_LIGHT, [mode, top - level(speed, "speed"), level(brightness, "brightness", BRIGHTNESS_MAX), (option << 4) | (rainbow ? RAINBOW : FIXED), ...rgb], true);
 };
 
 export const decodeLight = (reply, family = "gen2") => {
@@ -116,7 +118,7 @@ export const decodeLight = (reply, family = "gen2") => {
   return {
     mode: reply[1],
     speed: Math.max(0, Math.min(LEVELS, FAMILIES[family].speedTop - reply[2])),
-    brightness: Math.min(LEVELS, reply[3]),
+    brightness: Math.min(BRIGHTNESS_MAX, reply[3]),
     option: reply[4] >> 4,
     rainbow: flags === RAINBOW,
     color: flags < PRESETS.length ? PRESETS[flags] : hex === "#fafafa" ? "#ffffff" : hex,
