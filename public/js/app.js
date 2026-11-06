@@ -1,12 +1,12 @@
 /* Wires the page together: connection, lighting preview, screen, profiles, log. */
-import { EFFECTS, SCREEN_LIMIT, defaultProfile, parseProfile, serializeProfile, validateProfile } from "./profile.js";
+import { EFFECTS, defaultProfile, parseProfile, serializeProfile, validateProfile } from "./profile.js";
 import { KEYS, LAYOUT_HEIGHT, LAYOUT_WIDTH, SCREEN_TILE } from "./layout.js";
 import { keyColor } from "./lighting.js";
 import { HidSession, hex4, hidSupported } from "./hid.js";
 import { Nj81Driver, SimulationDriver, ViaDriver } from "./drivers.js";
 import { CHANNEL, RGB_EFFECTS, VIA, Via, previewEffectFor } from "./via.js";
 import { LEVELS, MODES, OFF, ROYUAN, Royuan, isOff, isWritable, modeInfo, pictureBytes } from "./royuan.js";
-import { hueSatToHex, rgbToHex, rgbaToRgb565Bytes } from "./util.js";
+import { hueSatToHex, rgbToHex } from "./util.js";
 import { languages, setLanguage, t } from "./i18n.js";
 
 const $ = (id) => document.getElementById(id);
@@ -74,7 +74,7 @@ const readForm = () => {
         return { nj81, effect: njPreview(nj81) };
       })() : via ? { viaEffect: Number($("effect").value), effect: previewEffectFor(Number($("effect").value)) } : { effect: $("effect").value }),
     },
-    screen: { ...profile.screen, width: $("screen-w").value, height: $("screen-h").value },
+    screen: profile.screen,
   }).profile;
   profile = next;
 };
@@ -83,15 +83,14 @@ const writeForm = () => {
   $("profile-name").value = profile.name;
   $("effect").value = nj ? String(profile.lighting.nj81?.off ? OFF : profile.lighting.nj81?.mode ?? 1) : via ? String(profile.lighting.viaEffect ?? 1) : profile.lighting.effect;
   refreshOptionControl();
-  $("light-option").value = String(profile.lighting.nj81?.option ?? 0);
+  const option = String(profile.lighting.nj81?.option ?? 0);
+  if ([...$("light-option").options].some((o) => o.value === option)) { $("light-option").value = option; }
   $("rainbow").checked = profile.lighting.nj81?.rainbow ?? false;
   $("color").value = profile.lighting.color;
   $("brightness").value = profile.lighting.brightness;
   $("speed").value = profile.lighting.speed;
   $("brightness-out").textContent = profile.lighting.brightness;
   $("speed-out").textContent = profile.lighting.speed;
-  $("screen-w").value = profile.screen.width;
-  $("screen-h").value = profile.screen.height;
   updatePaintControls();
   drawScreen();
 };
@@ -102,20 +101,28 @@ const updatePaintControls = () => {
 };
 
 /* Direction choices and the rainbow switch only exist for the NJ81's own effects. */
+/* Only the settings the chosen effect has are shown: no colour for Spectrum, no speed for Static, nothing but the
+   menu for "Lights off", no single colour while rainbow is on. */
 const refreshOptionControl = () => {
   const info = nj ? modeInfo(Number($("effect").value)) : null;
-  $("speed").disabled = Boolean(nj && (info?.noSpeed || Number($("effect").value) === OFF));
-  $("color").disabled = Boolean(nj && (info?.noColor || Number($("effect").value) === OFF));
+  const off = Boolean(nj) && Number($("effect").value) === OFF;
+  $("speed-box").hidden = off || Boolean(info?.noSpeed);
+  $("brightness-box").hidden = off;
+  $("color-box").hidden = off || Boolean(info?.noColor) || (Boolean(info) && $("rainbow").checked);
+  $("mode-tools").hidden = !nj;
+  $("hide-mode").hidden = !info;
+  $("show-modes").hidden = !nj || hiddenModes().size === 0;
   const options = info?.options ?? [];
   const keep = $("light-option").value;
   $("light-option").replaceChildren(...options.map((name, i) => new Option(name, String(i))));
-  if (options.length) { $("light-option").value = options[Number(keep)] ? keep : "0"; }
+  if (options.length) { $("light-option").value = keep !== "" && options[Number(keep)] ? keep : "0"; }
   $("light-option-box").hidden = options.length === 0;
-  $("rainbow-box").hidden = !nj || !info || Boolean(info.noColor);
+  $("rainbow-box").hidden = !nj || !info || Boolean(info.noColor) || off;
   for (const id of ["brightness", "speed"]) { $(id).step = nj ? String(100 / LEVELS) : "1"; }
 };
 
 const onFormChange = (event) => {
+  if (event?.target?.id === "rainbow") { refreshOptionControl(); }
   if (event?.target?.id === "effect") {
     refreshOptionControl();
     // leaving "off": light the keyboard back up instead of sending the new effect at brightness 0
@@ -130,6 +137,17 @@ const onFormChange = (event) => {
 };
 
 /* ---------- keyboard preview ---------- */
+/* Keycap colours: white like the user's NJ81 (light shows as a soft glow around the caps, accent caps dark as on the
+   real board), or black (the whole cap shows the light). Remembered in this browser. */
+const ACCENT_KEYS = new Set(["Esc", "Enter", "Up", "Down", "Left", "Right"]);
+const CAPS_KEY = "nj81-config.caps";
+const applyCaps = (caps) => {
+  $("keyboard").classList.toggle("caps-white", caps === "white");
+  $("keyboard").classList.toggle("caps-black", caps !== "white");
+  $("caps").value = caps;
+  try { localStorage.setItem(CAPS_KEY, caps); } catch (error) { /* private mode */ }
+};
+
 const buildKeyboard = () => {
   const box = $("keyboard");
   const surface = document.createElement("div");
@@ -140,7 +158,7 @@ const buildKeyboard = () => {
     el.type = "button";
     el.tabIndex = -1;   // clicking a key must not focus it (a focused key shows a ring when the keyboard is used)
     el.addEventListener("mousedown", (event) => event.preventDefault());
-    el.className = "key";
+    el.className = ACCENT_KEYS.has(key.label) ? "key accent" : "key";   // dark caps on the real white NJ81
     el.textContent = key.label;
     el.title = key.label;
     el.style.left = `${(key.x / LAYOUT_WIDTH) * 100}%`;
@@ -176,7 +194,7 @@ const paintKeyboard = (time) => {
   for (const key of KEYS) {
     const [red, green, blue] = keyColor(profile, key, time, pressed);
     const el = keyEls.get(key.id);
-    el.style.background = rgbToHex(red, green, blue);
+    el.style.setProperty("--led", rgbToHex(red, green, blue));   // the CSS of the chosen keycap colour decides how it shows
   }
 };
 
@@ -195,7 +213,8 @@ const drawScreen = () => {
   context.fillStyle = "#000";
   context.fillRect(0, 0, width, height);
   if (screenPixels) {
-    const scale = Math.min(width / screenPixels.width, height / screenPixels.height);   // fit, keep the proportions
+    const fit = $("screen-fit").value === "contain" ? Math.min : Math.max;   // contain: whole picture; cover: fill and crop, like the official driver
+    const scale = fit(width / screenPixels.width, height / screenPixels.height);
     const w = screenPixels.width * scale;
     const h = screenPixels.height * scale;
     context.drawImage(screenPixels, (width - w) / 2, (height - h) / 2, w, h);
@@ -220,6 +239,7 @@ const onScreenFile = async (event) => {
   try {
     screenPixels = await createImageBitmap(file);
     profile.screen.name = file.name;
+    $("screen-name").textContent = `${file.name} · ${screenPixels.width}×${screenPixels.height} → ${profile.screen.width}×${profile.screen.height}`;
     drawScreen();
     log(`${t("screenImage")}: ${file.name} (${screenPixels.width}×${screenPixels.height})`);
   } catch (error) { log(`${t("importFailed")}: ${error.message}`); }
@@ -228,8 +248,9 @@ const onScreenFile = async (event) => {
 /* With a NJ81 connected the screen is fixed at its real size and pictures can be sent into one of its slots. */
 const updateScreenControls = () => {
   const screen = nj?.model?.screen;
-  $("screen-w").disabled = $("screen-h").disabled = Boolean(screen);
   $("screen-device").hidden = !nj?.display;
+  $("screen-connect-note").hidden = Boolean(nj?.display);
+  $("screen-device-note").hidden = !screen;
   for (const id of ["screen-slot-box", "screen-send"]) { $(id).hidden = !screen; }
   $("screen-size-note").hidden = Boolean(screen);
   if (screen) { $("screen-slot").replaceChildren(...Array.from({ length: screen.slots }, (_, i) => new Option(String(i + 1), String(i)))); }
@@ -276,12 +297,6 @@ const download = (name, data, type) => {
   setTimeout(() => URL.revokeObjectURL(url), 1000);
 };
 
-const exportRgb565 = () => {
-  const canvas = $("screen-canvas");
-  const { data } = canvas.getContext("2d", { willReadFrequently: true }).getImageData(0, 0, canvas.width, canvas.height);
-  download(`screen-${canvas.width}x${canvas.height}.rgb565.bin`, rgbaToRgb565Bytes(data), "application/octet-stream");
-  log(`RGB565 ${canvas.width}×${canvas.height}, ${canvas.width * canvas.height * 2} bytes`);
-};
 
 /* ---------- connection ---------- */
 const setConnected = (on, detail) => {
@@ -316,8 +331,23 @@ const connect = async (filters) => {
 };
 
 /* ---------- reading what the keyboard is set to (VIA) ---------- */
+/* Effects this keyboard does not run (it did not keep them, or the user hid them), remembered per keyboard model. */
+const modesKey = () => `nj81-config.hidden-modes.${nj?.deviceId ?? "none"}`;
+const hiddenModes = () => { try { return new Set(JSON.parse(localStorage.getItem(modesKey()) || "[]")); } catch (error) { return new Set(); } };
+const setHiddenModes = (set) => { try { localStorage.setItem(modesKey(), JSON.stringify([...set])); } catch (error) { /* private mode */ } };
+const hideMode = (mode) => {
+  const set = hiddenModes();
+  set.add(mode);
+  setHiddenModes(set);
+  fillEffectOptions();
+  $("effect").value = String(profile.lighting.nj81?.off ? OFF : MODES.find((m) => !set.has(m.mode))?.mode ?? OFF);
+  onFormChange({ target: $("effect") });
+  scheduleLive();
+  log(`${t("modeHidden")}: ${modeInfo(mode)?.name ?? mode}`);
+};
+
 const fillEffectOptions = () => {
-  const options = nj ? [new Option(t("lightsOff"), String(OFF)), ...MODES.map((m) => new Option(m.name, String(m.mode)))] : via ? RGB_EFFECTS.map((effect) => new Option(effect.label, String(effect.id))) : EFFECTS.map((id) => new Option(t(`effect_${id}`), id));
+  const options = nj ? [new Option(t("lightsOff"), String(OFF)), ...MODES.filter((m) => !hiddenModes().has(m.mode)).map((m) => new Option(m.name, String(m.mode)))] : via ? RGB_EFFECTS.map((effect) => new Option(effect.label, String(effect.id))) : EFFECTS.map((id) => new Option(t(`effect_${id}`), id));
   $("effect").replaceChildren(...options);
 };
 
@@ -461,8 +491,12 @@ const pushNj81 = async () => {
     njDirty = false;
     const settings = njSettings();
     try {
-      const { kept } = await nj.client.writeLight(settings);
-      log(kept ? `${t("applied")}: ${describeNj(settings)}` : `${t("notKept")}: ${describeNj(settings)}`);
+      const { kept, light } = await nj.client.writeLight(settings);
+      log(kept ? `${t("applied")}: ${describeNj(settings)}` : `${t("notKept")}: ${describeNj(settings)} → ${describeNj({ ...light, mode: light.mode })}`);
+      if (!kept && !settings.off && light.mode !== settings.mode && modeInfo(settings.mode)) {   // the keyboard refused this effect
+        log(`${t("modeRefused")}: ${modeInfo(settings.mode).name}`);
+        hideMode(settings.mode);
+      }
     } catch (error) { log(`${t("applyFailed")}: ${error.message}`); }
   }
   njBusy = false;
@@ -531,7 +565,7 @@ const init = () => {
   $("connect").addEventListener("click", () => connect(DEVICE_FILTERS));
   $("connect-other").addEventListener("click", () => connect([]));
   $("disconnect").addEventListener("click", () => session.close());
-  for (const id of ["effect", "color", "brightness", "speed", "screen-w", "screen-h", "profile-name", "light-option", "rainbow"]) { $(id).addEventListener("input", onFormChange); }
+  for (const id of ["effect", "color", "brightness", "speed", "profile-name", "light-option", "rainbow"]) { $(id).addEventListener("input", onFormChange); }
   // the keyboard gets a setting once it is chosen (slider released, colour picked), not on every step of a drag
   for (const id of ["effect", "color", "brightness", "speed", "light-option", "rainbow"]) {
     $(id).addEventListener("change", (event) => { scheduleLive(); if (event.target.tagName === "SELECT" || event.target.type === "range") { event.target.blur(); } });
@@ -547,10 +581,9 @@ const init = () => {
   });
   window.addEventListener("keyup", (event) => showKey(event.code, false));
   window.addEventListener("blur", () => { for (const el of keyEls.values()) { el.classList.remove("down"); } });
-  $("screen-w").min = $("screen-h").min = SCREEN_LIMIT.min;
-  $("screen-w").max = $("screen-h").max = SCREEN_LIMIT.max;
-  $("screen-file").addEventListener("change", onScreenFile);
-  $("screen-export").addEventListener("click", exportRgb565);
+  $("screen-fit").addEventListener("change", (event) => { drawScreen(); event.target.blur(); });
+  $("hide-mode").addEventListener("click", () => { const mode = Number($("effect").value); if (modeInfo(mode)) { hideMode(mode); } });
+  $("show-modes").addEventListener("click", () => { setHiddenModes(new Set()); const keep = $("effect").value; fillEffectOptions(); $("effect").value = keep; refreshOptionControl(); });  $("screen-file").addEventListener("change", onScreenFile);
   $("fill-all").addEventListener("click", () => { for (const key of KEYS) { profile.lighting.perKey[key.id] = $("color").value.toLowerCase(); } });
   $("clear-all").addEventListener("click", () => { profile.lighting.perKey = {}; });
   $("save-local").addEventListener("click", saveLocal);
@@ -560,6 +593,8 @@ const init = () => {
   $("apply").addEventListener("click", apply);
 
   buildKeyboard();
+  applyCaps((() => { try { return localStorage.getItem(CAPS_KEY); } catch (error) { return null; } })() === "black" ? "black" : "white");
+  $("caps").addEventListener("change", (event) => { applyCaps(event.target.value); event.target.blur(); });
   updateScreenControls();
   writeForm();
   refreshSavedList();
