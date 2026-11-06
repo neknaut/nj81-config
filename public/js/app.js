@@ -51,10 +51,16 @@ const log = (message, level = "info", area = "") => {
   const box = $("log");
   const line = document.createElement("div");
   line.className = `log-line log-${level}`;
-  line.textContent = `${new Date().toLocaleTimeString()}  ${ICONS[level] ?? "·"} ${area ? `[${t(area)}] ` : ""}${message}`;
+  line.textContent = `${new Date().toLocaleTimeString()}  ${area ? `${t(area)}: ` : ""}${message}`;
+  line.title = ICONS[level] ?? "";
   box.appendChild(line);
   while (box.childElementCount > 400) { box.firstElementChild.remove(); }
   box.scrollTop = box.scrollHeight;
+  const mini = $("mini-log");   // the last five lines, next to the lighting controls
+  if (mini) {
+    mini.appendChild(line.cloneNode(true));
+    while (mini.childElementCount > 5) { mini.firstElementChild.remove(); }
+  }
 };
 const logOk = (area, message) => log(message, "ok", area);
 const logWarn = (area, message) => log(message, "warn", area);
@@ -103,8 +109,7 @@ const writeForm = () => {
   $("color").value = profile.lighting.color;
   $("brightness").value = profile.lighting.brightness;
   $("speed").value = profile.lighting.speed;
-  $("brightness-out").textContent = profile.lighting.brightness;
-  $("speed-out").textContent = profile.lighting.speed;
+  renderControls();
   updatePaintControls();
   drawScreen();
 };
@@ -112,6 +117,49 @@ const writeForm = () => {
 const updatePaintControls = () => {
   const painting = profile.lighting.effect === "perkey";
   for (const id of ["paint-help", "fill-all", "clear-all"]) { $(id).hidden = !painting; }
+};
+
+/* ---------- the visible controls (option A): effect list, direction chips, swatches, 0..4 steps ----------
+   The <select>/<input range> elements stay the single source of truth; these buttons set them and fire their events. */
+const fire = (el) => { el.dispatchEvent(new Event("input", { bubbles: true })); el.dispatchEvent(new Event("change", { bubbles: true })); };
+const button = (label, pressed, onClick, extra = {}) => {
+  const b = Object.assign(document.createElement("button"), { type: "button", ...extra });
+  if (typeof label === "string") { b.textContent = label; } else { b.append(...label); }
+  b.setAttribute("aria-pressed", String(pressed));
+  b.addEventListener("click", onClick);
+  return b;
+};
+const renderEffectList = () => {
+  const select = $("effect");
+  const reactive = nj ? reactiveModes() : new Set();
+  $("effect-list").replaceChildren(...[...select.options].map((option) => {
+    const parts = [Object.assign(document.createElement("span"), { textContent: option.textContent })];
+    if (nj && reactive.has(Number(option.value))) { parts.push(Object.assign(document.createElement("span"), { className: "tag", textContent: t("typeTag") })); }
+    return button(parts, option.value === select.value, () => { select.value = option.value; fire(select); });
+  }));
+  const count = nj ? select.options.length - 1 : 0;
+  $("effect-count").textContent = nj ? `· ${count} ${t("modesOf")} ${nj.model.name}` : "";
+};
+const renderSteps = (id, top) => {
+  const range = $(id);
+  const level = toLevel(Number(range.value), top);
+  const box = $(`${id}-steps`);
+  box.style.setProperty("--n", String(top + 1));
+  box.replaceChildren(...Array.from({ length: top + 1 }, (_, n) =>
+    button(String(n), n === level, () => { range.value = String(fromLevel(n, top)); fire(range); }, { ariaLabel: `${t(id)} ${n}` })));
+  $(`${id}-out`).textContent = `${level}/${top}`;
+};
+const renderControls = () => {
+  if (!$("effect-list")) { return; }
+  renderEffectList();
+  const dirs = $("light-option");
+  $("dir-chips").replaceChildren(...[...dirs.options].map((option) =>
+    button(option.textContent, option.value === dirs.value, () => { dirs.value = option.value; fire(dirs); })));
+  const colour = $("color").value.toLowerCase();
+  $("color-hex").textContent = colour;
+  for (const swatch of $("swatches").querySelectorAll("button.swatch")) { swatch.setAttribute("aria-pressed", String(swatch.title === colour)); }
+  renderSteps("brightness", nj ? brightnessTop : LEVELS);
+  renderSteps("speed", LEVELS);
 };
 
 /* Direction choices and the rainbow switch only exist for the NJ81's own effects. */
@@ -137,6 +185,7 @@ const refreshOptionControl = () => {
   if (options.length) { $("light-option").value = keep !== "" && options[Number(keep)] ? keep : "0"; }
   $("light-option-box").hidden = options.length === 0;
   $("rainbow-box").hidden = !nj || !info || Boolean(info.noColor) || off;
+  queueMicrotask(renderControls);
   $("speed").step = nj ? String(100 / LEVELS) : "1";
   $("brightness").step = nj ? String(100 / brightnessTop) : "1";
 };
@@ -150,8 +199,7 @@ const onFormChange = (event) => {
   }
   readForm();
   if (nj && profile.lighting.nj81?.off && Number($("effect").value) !== OFF) { $("effect").value = String(OFF); refreshOptionControl(); }
-  $("brightness-out").textContent = profile.lighting.brightness;
-  $("speed-out").textContent = profile.lighting.speed;
+  renderControls();
   updatePaintControls();
   drawScreen();
 };
@@ -265,6 +313,8 @@ const drawScreen = () => {
     context.textBaseline = "middle";
     context.fillText("NJ81", width / 2, height / 2);
   }
+  const mini = $("mini-screen");
+  if (mini) { mini.width = width; mini.height = height; mini.getContext("2d").drawImage(canvas, 0, 0); }
   const tile = $("screen-tile");
   if (tile) {
     tile.width = width;
@@ -421,16 +471,44 @@ const download = (name, data, type) => {
 
 
 /* ---------- connection ---------- */
-/* Lighting, screen and profile only make sense with a keyboard that answered: until then those cards are hidden. */
+/* Tabs in the sidebar. Lighting, screen and profile only make sense with a keyboard that answered: until then they
+   show the "connect to start" card; the log is always there. */
+let ready = false;
+let currentTab = "light";
+const TAB_SUB = { light: "subLight", screen: "subScreen", profile: "subProfile", log: "subLog" };
+const TAB_TITLE = { light: "lighting", screen: "screen", profile: "profile", log: "log" };
+const showTab = (tab) => {
+  currentTab = tab;
+  for (const button of document.querySelectorAll("[data-tab]")) {
+    if (button.dataset.tab === tab) { button.setAttribute("aria-current", "page"); } else { button.removeAttribute("aria-current"); }
+  }
+  for (const name of Object.keys(TAB_SUB)) {
+    const panel = $(`tab-${name}`);
+    panel.hidden = name !== tab || (panel.classList.contains("needs-keyboard") && !ready);
+  }
+  $("start-hint").hidden = ready || tab === "log";
+  $("page-title").dataset.i18n = TAB_TITLE[tab];
+  $("page-title").textContent = t(TAB_TITLE[tab]);
+  $("page-sub").dataset.i18n = TAB_SUB[tab];
+  $("page-sub").textContent = t(TAB_SUB[tab]);
+};
 const setControlsEnabled = (on) => {
-  for (const card of document.querySelectorAll(".needs-keyboard")) { card.hidden = !on; }
-  $("start-hint").hidden = on;
+  ready = on;
+  if (!on) { $("confirm-pill").hidden = true; }
+  showTab(currentTab);
+};
+/* The pill next to the title: the keyboard confirmed the last change, or reported something else. */
+const setConfirm = (ok) => {
+  $("confirm-pill").hidden = false;
+  $("confirm-pill").classList.toggle("warn", !ok);
+  $("confirm-text").textContent = t(ok ? "confirmOk" : "confirmBad");
 };
 
 const setConnected = (on, detail) => {
   if (!on) { setControlsEnabled(false); }
   const status = $("status");
-  status.className = `chip ${on ? "on" : "off"}`;
+  $("status-dot").classList.toggle("on", on);
+  $("connection-help").hidden = on;
   status.textContent = t(on ? "status_on" : "status_off");
   status.dataset.i18n = on ? "status_on" : "status_off";
   $("connect").hidden = on;
@@ -519,6 +597,7 @@ const hideMode = (mode) => {
 const fillEffectOptions = () => {
   const options = nj ? [new Option(t("lightsOff"), String(OFF)), ...modeChoices().map((mode) => new Option(modeLabel(mode), String(mode)))] : via ? RGB_EFFECTS.map((effect) => new Option(effect.label, String(effect.id))) : EFFECTS.map((id) => new Option(t(`effect_${id}`), id));
   $("effect").replaceChildren(...options);
+  renderEffectList();
 };
 
 const detectVia = async (detail) => {
@@ -740,7 +819,8 @@ const noteResult = (settings, diffs) => {
 /* The status table: what the page asked for, what the keyboard reports, row by row. */
 const showStatus = (settings, light, diffs) => {
   const wrong = new Set(diffs.map((d) => d.field));
-  const rows = (settings.off ? ["off"] : ["off", "mode", ...(modeInfo(settings.mode)?.options ? ["option"] : []), "color", "brightness", "speed"])
+  // as in option A: effect, direction, colour, brightness, speed (the lights-off row only when it matters)
+  const rows = (settings.off ? ["off"] : [...(wrong.has("off") ? ["off"] : []), "mode", ...(modeInfo(settings.mode)?.options ? ["option"] : []), "color", "brightness", "speed"])
     .filter((field) => !(field === "speed" && modeInfo(settings.mode)?.noSpeed) && !(field === "color" && (modeInfo(settings.mode)?.noColor || settings.rainbow)));
   const cell = (text, cls = "") => Object.assign(document.createElement("td"), { textContent: text, className: cls });
   const value = (source, field) => field === "off" ? (field in source ? source.off : isOff(source)) : source[field];
@@ -748,7 +828,7 @@ const showStatus = (settings, light, diffs) => {
     const tr = document.createElement("tr");
     const ok = !wrong.has(field);
     tr.append(cell(t(FIELD_LABEL[field])), cell(fieldValue(field, value(settings, field), settings.mode)),
-      cell(fieldValue(field, field === "off" ? isOff(light) : light[field], settings.mode)), cell(ok ? "✅" : "⚠️", ok ? "ok" : "bad"));
+      cell(`${fieldValue(field, field === "off" ? isOff(light) : light[field], settings.mode)} · ${t(ok ? "match" : "differs")}`, ok ? "ok" : "bad"));
     return tr;
   }));
   $("effect-report").textContent = [...effectReport].map(([mode, r]) =>
@@ -776,6 +856,7 @@ const pushNj81 = async () => {
       noteResult(settings, diffs);
       showStatus(settings, light, diffs);
       const typing = !settings.off && reactiveModes().has(settings.mode) ? ` · ${t("reactiveNote")}` : "";
+      setConfirm(!diffs.length);
       if (!diffs.length) { logOk("areaLight", `${t("applied")}${retried ? ` (${t("afterRetry")})` : ""}: ${describeNj(settings)}${typing}`); }
       else { logWarn("areaLight", `${t("notApplied")} ${settings.off ? t("lightsOff") : modeLabel(settings.mode)}: ${describeDiffs(diffs, settings.mode)}`); }
     } catch (error) { logError("areaLight", `${t("applyFailed")}: ${error.message}`); }
@@ -894,8 +975,13 @@ const init = () => {
     const button = Object.assign(document.createElement("button"), { type: "button", className: "swatch", title: swatch });
     button.style.background = swatch;
     button.addEventListener("click", () => { $("color").value = swatch; onFormChange({ target: $("color") }); scheduleLive(); });
-    $("swatches").appendChild(button);
+    $("swatches").insertBefore(button, $("swatches").querySelector(".custom"));
   }
+  for (const tab of document.querySelectorAll("[data-tab]")) { tab.addEventListener("click", () => showTab(tab.dataset.tab)); }
+  $("mini-pick").addEventListener("click", () => { showTab("screen"); $("screen-file").click(); });
+  $("mini-gallery").addEventListener("click", () => { showTab("screen"); $("gallery-box").open = true; });
+  $("mini-clock").addEventListener("click", () => { if (nj) { syncClock(); } });
+  $("reactive").addEventListener("change", () => renderEffectList());
   $("show-modes").addEventListener("click", () => { setHiddenModes(new Set()); const known = board(); known.done = false; saveBoard(known); const keep = $("effect").value; fillEffectOptions(); $("effect").value = keep; refreshOptionControl(); });  $("screen-file").addEventListener("change", onScreenFile);
   $("fill-all").addEventListener("click", () => { for (const key of KEYS) { profile.lighting.perKey[key.id] = $("color").value.toLowerCase(); } });
   $("clear-all").addEventListener("click", () => { profile.lighting.perKey = {}; });

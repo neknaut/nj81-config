@@ -65,7 +65,8 @@ npm test                 # node --test: colours, RGB565, profiles, effects, driv
 | `public/js/profile.js`, `lighting.js`, `layout.js`, `util.js`, `i18n.js` | Profile validation, preview effects, preview layout, helpers, translations |
 | `docs/` | [Capturing the official driver](docs/capturing-usb.md) and the [protocol notes](docs/protocol-notes.md) |
 
-Plain ES modules, no build step and no dependencies.
+Plain ES modules, no build step and no dependencies. The interface follows prototype option A (dark control panel: sidebar with the
+connection and the Lighting / Screen / Profile / Log tabs, the keyboard drawing, then effects, settings and status side by side).
 
 ## License
 
