@@ -11,7 +11,8 @@ The NJ81 speaks Keydous's own vendor protocol (ROYUAN, the one the official driv
 
 - **NJ81-CP, NJ81-CP V3, NJ81-MAX, NJ81-MAX CP** (gen2 command set): lighting, clock, still pictures for the 160×80 screen.
 - **NJ81, NJ81S, NJ81-ED** (older yc500 command set, recognised with read-only commands): lighting, lights off, clock. Their screen
-  size is not on file, so pictures are not sent to them.
+  size is not on file: the NJ81-ED takes still pictures at the family's 160×80 (they join the screen rotation; **Clear pictures and
+  GIFs**, the driver's own Clear, removes them). Animated GIFs for it wait for a capture of the official driver.
 
 Use the **USB cable** and close the official driver first (only one program can talk to the keyboard). Tested against simulated
 keyboards; real-hardware results so far come from an NJ81-ED.
@@ -40,7 +41,9 @@ Open it in **Chrome or Edge** on a computer (WebHID needs HTTPS or `localhost`),
 ## Safety
 
 There is **no firmware, bootloader, erase or factory-reset command** in this project and there will not be: `packet()` refuses those
-opcodes. This project is not affiliated with Keydous.
+opcodes. One exception, copied byte for byte from a USB capture of the official driver: **Clear pictures and GIFs** (Screen tab,
+NJ81-ED only) sends the driver's Clear (`AC 00 00 00 00 00 00 53`) so only the status screen is left, then leaves the keyboard alone
+for a minute. The yc500 display erase (`0x2C`) was sent once to an NJ81-ED by mistake and stays blocked.
 
 ## Deploy on Render
 

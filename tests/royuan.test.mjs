@@ -62,7 +62,7 @@ test("writing lighting is read back", async () => {
   const { transport } = fakeNj81();
   const nj = new Royuan(transport, fast);
   const back = await nj.writeLight({ mode: 12, speed: 1, brightness: 4, option: 1, color: "#00ff00" });
-  assert.deepEqual(back, { diffs: [], light: { mode: 12, speed: 1, brightness: 4, option: 1, rainbow: false, color: "#00ff00" } });
+  assert.deepEqual({ diffs: back.diffs, light: back.light }, { diffs: [], light: { mode: 12, speed: 1, brightness: 4, option: 1, rainbow: false, color: "#00ff00" } });
 });
 
 test("pictures are column-major big-endian RGB565, announced then sent in 56-byte pages", async () => {
@@ -130,7 +130,7 @@ test("flash writes are spaced at least a second apart, reads are not", async () 
 
 test("off: brightness 0 on gen2, the off switch alone on yc500; the menu follows the manufacturer's order", async () => {
   const { MODES, isOff } = await import("../public/js/royuan.js");
-  assert.deepEqual(MODES.map((m) => m.mode), [4, 5, 6, 7, 8, 9, 10, 11, 19, 12, 14, 15, 16, 17, 18, 1, 2, 3]);
+  assert.deepEqual(MODES.map((m) => m.mode), [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 14, 15, 16, 17, 18, 19], "the official driver's order");
   assert.equal(isOff({ mode: 4, brightness: 0 }), true);
   assert.equal(isOff({ mode: 4, brightness: 2 }), false);
   assert.equal(isOff({ mode: 4, brightness: 0, off: false }), false, "yc500: switched on with Fn + Backspace at brightness 0");
@@ -176,17 +176,21 @@ test("an NJ81-ED is recognised as yc500 by reads only, and its lights can be swi
   nj.family = "yc500";
   assert.equal(await nj.hasDisplay(), true);
   const light = await nj.readLight();
-  assert.deepEqual([light.mode, light.speed, light.brightness, light.off], [2, 0, 4, true]);   // wire speed 5 = slowest
+  assert.deepEqual([light.mode, light.speed, light.brightness, light.off], [2, 0, 4, true]);   // wire speed 4 or more = slowest
   assert.equal(await nj.profile(), 0);
 
   const on = await nj.writeLight({ mode: 4, speed: 4, brightness: 3, option: 1, color: "#0000ff", off: false });
   assert.deepEqual(on.diffs, []);
-  assert.deepEqual(state.light.slice(0, 4), [4, 1, 3, 0x17]);   // speed 4 goes out as 1 on yc500
+  assert.deepEqual(state.light.slice(0, 4), [4, 0, 3, 0x17]);   // speed 4 goes out as 0 (the driver's MAXSPEED 4 - speed)
   assert.equal(state.options, 0x00, "backlight-off bit cleared, Mac-mode bit not written back");
   const off = await nj.writeLight({ mode: 4, speed: 4, brightness: 3, option: 1, color: "#0000ff", off: true });
   assert.deepEqual(off.diffs, []);
-  assert.equal(state.options & 0x10, 0x10);
-  assert.deepEqual(state.sent.filter((p) => p[0] === 0x06).map((p) => [...p.subarray(1, 5)]), [[0, 0x00, 1, 2], [0, 0x10, 1, 2]]);
+  assert.equal(state.light[0], 0, "lights off is effect 0, which the NJ81-ED shows at once");
+  assert.equal(state.options & 0x10, 0, "the backlight-off bit is left alone (writing it puts the keyboard's off key out of step)");
+  assert.deepEqual(state.sent.filter((p) => p[0] === 0x06).map((p) => [...p.subarray(1, 5)]), [[0, 0x00, 1, 2]]);
+  const back = await nj.writeLight({ mode: 4, speed: 4, brightness: 3, option: 1, color: "#0000ff", off: false });
+  assert.deepEqual(back.diffs, []);
+  assert.equal(state.light[0], 4, "back on: the effect is sent again");
 });
 
 test("a board that fits neither family stays unknown", async () => {
@@ -253,7 +257,7 @@ test("radiant runs along the pressed key's row to both sides; key shadow lights 
 
 test("the NJ81-ED lists only the effects seen on it", async () => {
   const { modelFor } = await import("../public/js/royuan.js");
-  assert.deepEqual(modelFor(873).modes, [4, 5, 6, 8, 9, 10, 11, 19, 12, 14, 16, 17, 18, 2, 3]);
+  assert.deepEqual(modelFor(873).modes, [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 14, 15, 16, 17, 18, 19]);
 });
 
 test("an NJ81-ED that is off lights up with the first write, before the new effect is written", async () => {
@@ -281,4 +285,119 @@ test("a busy keyboard: HID transfers are retried before giving up", async () => 
   assert.equal((await transport.getFeature())[0], 7);
   session.device.sendFeatureReport = async () => { throw new Error("Failed to write the feature report."); };
   await assert.rejects(() => transport.setFeature(new Uint8Array(64)), (error) => error.busy === true && error.attempts === 4);
+});
+
+test("lighting latency: no needless effect write when an NJ81-ED comes back on, sentAt is the first write, superseded stops the read-back", async () => {
+  const { transport, state } = fakeNj81Ed();
+  let clock = 0;
+  const nj = new Royuan(transport, { now: () => clock, sleep: async (ms) => { clock += ms; } });
+  nj.family = "yc500";
+  const stored = { mode: 2, speed: 0, brightness: 4, option: 0, color: "#00ff00", off: false };   // the fake's stored effect
+  const t0 = clock;
+  const on = await nj.writeLight(stored);
+  assert.deepEqual(on.diffs, []);
+  assert.equal(state.sent.filter((p) => p[0] === OP.SET_LIGHT).length, 0, "same effect: only the backlight switch is written");
+  assert.ok(clock - t0 < 500, "confirmed without waiting for a second flash gap");
+  assert.equal(on.sentAt, nj.lastWriteAt);
+
+  clock += 5000;
+  await nj.writeLight({ ...stored, off: true });
+  clock += 5000;
+  const t1 = clock;
+  const writesBefore = state.sent.filter((p) => p[0] === OP.SET_LIGHT || p[0] === 0x06).length;
+  const changed = await nj.writeLight({ ...stored, mode: 4 });   // off from the page was effect 0: one effect write brings it back
+  assert.ok(changed.sentAt - t1 < 200, "the lights come on at once");
+  assert.equal(state.sent.filter((p) => p[0] === OP.SET_LIGHT || p[0] === 0x06).length - writesBefore, 1, "a single write, no flash gap");
+
+  const fooled = { ...transport, async getFeature() { const r = await transport.getFeature(); return r[0] === 0x87 ? Uint8Array.from(r).fill(9, 1, 2) : r; } };
+  const nj2 = new Royuan(fooled, { now: () => clock, sleep: async (ms) => { clock += ms; } });
+  nj2.family = "yc500";
+  const t2 = clock;
+  const result = await nj2.writeLight({ ...stored, mode: 5 }, { superseded: () => true });
+  assert.equal(result.superseded, true);
+  assert.ok(clock - t2 < 1200 + 50, "no read-back pauses once newer settings wait");
+});
+
+test("a GIF goes as one announce (frame count, average delay in 10 ms steps), then the pages of every frame", async () => {
+  const { frameDelay } = await import("../public/js/royuan.js");
+  const { transport, state } = fakeNj81();
+  const nj = new Royuan(transport, fast);
+  const screen = { width: 4, height: 2, slots: 5 };
+  const frame = () => new Uint8Array(4 * 2 * 2);
+  let last = 0;
+  await nj.uploadAnimation([{ bytes: frame(), ms: 100 }, { bytes: frame(), ms: 40 }, { bytes: frame(), ms: 5000 }], screen, (done, total) => { last = `${done}/${total}`; });
+  const announces = state.sent.filter((p) => p[0] === OP.PICTURE_ANNOUNCE).map((p) => [...p.subarray(1, 4)]);
+  assert.deepEqual(announces, [[0, 3, 171]], "one announce: frame 0, 3 frames, (100 + 40 + 5000) / 3 ms = 171 steps");
+  assert.deepEqual(state.sent.filter((p) => p[0] === OP.PICTURE_DATA).map((p) => [p[1], p[2]]), [[0, 3], [1, 3], [2, 3]]);
+  assert.equal(last, "3/3");
+  assert.equal(frameDelay(3), 1);
+  await assert.rejects(() => nj.uploadAnimation(Array.from({ length: 31 }, () => ({ bytes: frame(), ms: 100 })), screen), RoyuanError);
+});
+
+
+test("a yc500 board (NJ81-ED) takes still pictures; animations wait for a capture of the official driver", async () => {
+  const { transport, state } = fakeNj81Ed();
+  const nj = new Royuan(transport, fast);
+  nj.family = "yc500";
+  const screen = { width: 4, height: 2, slots: 1 };
+  await assert.rejects(() => nj.uploadAnimation([{ bytes: new Uint8Array(16), ms: 100 }], screen), RoyuanError);
+  assert.equal(state.sent.length, 0, "nothing sent for the animation");
+});
+
+test("Clear pictures and GIFs: the official driver's bare 0xAC (captured on an NJ81-ED), one read, only on yc500", async () => {
+  const { clearScreenPacket } = await import("../public/js/royuan.js");
+  assert.deepEqual([...clearScreenPacket().subarray(0, 8)], [0xac, 0, 0, 0, 0, 0, 0, 0x53], "as the driver sends it");
+  assert.throws(() => packet(0xac), RoyuanError, "packet() still refuses it");
+  const gen2 = fakeNj81();
+  await assert.rejects(() => new Royuan(gen2.transport, fast).clearScreen({ waitMs: 0 }), RoyuanError);
+  assert.equal(gen2.state.sent.length, 0);
+  const ed = fakeNj81Ed();
+  let clock = 0;
+  const nj = new Royuan(ed.transport, { now: () => clock, sleep: async (ms) => { clock += ms; } });
+  nj.family = "yc500";
+  let listener = null;
+  const withInput = { ...ed.transport, onInput: (fn) => { listener = fn; return () => { listener = null; }; } };
+  const fractions = [];
+  const nj2 = new Royuan(withInput, { now: () => clock, sleep: async (ms) => { clock += ms; if (clock >= 41000 && listener) { listener(Uint8Array.from([0x05, 0x2c, 0, 0])); } } });
+  nj2.family = "yc500";
+  clock = 0;
+  const result = await nj2.clearScreen({ progress: (f) => fractions.push(f) });
+  assert.deepEqual(ed.state.sent.map((p) => p[0]), [0xac], "nothing but the clear");
+  assert.equal(result.confirmed, true, "the keyboard's 05 2C report ends the wait");
+  assert.ok(result.ms >= 41000 && result.ms < 42000, `done when the keyboard says so (${result.ms} ms)`);
+  assert.equal(fractions.at(-1), 1);
+  assert.equal(listener, null, "stops listening");
+
+  clock = 0;
+  const quiet = await nj.clearScreen({ timeoutMs: 5000 });
+  assert.equal(quiet.confirmed, false, "no done report: gives up after the timeout");
+  assert.ok(quiet.ms >= 5000);
+});
+
+test("NJ81-ED screen: one announce (slot at byte 18, frame count, delay in ms, the box), then every frame's pages with the delay", async () => {
+  const { screenBox, boxBytes, tftAnnounce } = await import("../public/js/royuan.js");
+  const w = 4;
+  const h = 2;
+  const frame = (lit) => { const a = new Uint8ClampedArray(w * h * 4); for (const [x, y] of lit) { a.set([255, 0, 0, 255], (y * w + x) * 4); } return a; };
+  const f1 = frame([[1, 0]]);
+  const f2 = frame([[2, 1]]);
+  assert.deepEqual(screenBox([f1, f2], w, h), { left: 1, top: 0, right: 3, bottom: 2 }, "the box around every lit pixel of all frames");
+  assert.deepEqual(screenBox([frame([])], w, h), { left: 0, top: 0, right: w, bottom: h }, "all black: the whole screen");
+  assert.deepEqual([...boxBytes(f1, w, { left: 1, top: 0, right: 3, bottom: 2 })], [0xf8, 0, 0, 0, 0, 0, 0, 0], "column by column, red at (1,0) first");
+  const a = tftAnnounce({ count: 3, delay: 100, length: 25600, box: { left: 0, top: 0, right: 160, bottom: 80 }, slot: 2 });
+  assert.deepEqual([...a.subarray(0, 7)], [0xa5, 0, 3, 100, 0x00, 0x64, 0]);
+  assert.deepEqual([...a.subarray(8, 19)], [0, 0, 160, 80, 0, 0, 0, 0, 0, 0, 2]);
+
+  const { transport, state } = fakeNj81Ed();
+  const replies = transport.setFeature;
+  transport.setFeature = async (data) => { await replies(data); if (data[0] === OP.PICTURE_ANNOUNCE) { const r = new Uint8Array(64); r[0] = 0xa5; r[1] = 1; state.pending = r; } };
+  const nj = new Royuan(transport, fast);
+  nj.family = "yc500";
+  const result = await nj.uploadScreen([f1, f2, f1], { width: w, height: h, slots: 5 }, { slot: 4, delayMs: 83.4 });
+  assert.deepEqual([result.count, result.delay], [3, 83], "the GIF's average delay in ms");
+  const sent = state.sent.filter((p) => p[0] === OP.PICTURE_ANNOUNCE || p[0] === OP.PICTURE_DATA);
+  assert.equal(sent.filter((p) => p[0] === OP.PICTURE_ANNOUNCE).length, 1, "one announce for the whole GIF");
+  assert.equal(sent.find((p) => p[0] === OP.PICTURE_ANNOUNCE)[18], 4, "the slot at byte 18");
+  assert.deepEqual(sent.filter((p) => p[0] === OP.PICTURE_DATA).map((p) => [...p.subarray(1, 7)]), [[0, 3, 83, 0, 0, 8], [1, 3, 83, 0, 0, 8], [2, 3, 83, 0, 0, 8]]);
+  await assert.rejects(() => nj.uploadScreen([f1], { width: w, height: h, slots: 5 }, { slot: 5 }), RoyuanError);
 });
