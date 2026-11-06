@@ -421,7 +421,14 @@ const download = (name, data, type) => {
 
 
 /* ---------- connection ---------- */
+/* Lighting, screen and profile only make sense with a keyboard that answered: until then those cards are hidden. */
+const setControlsEnabled = (on) => {
+  for (const card of document.querySelectorAll(".needs-keyboard")) { card.hidden = !on; }
+  $("start-hint").hidden = on;
+};
+
 const setConnected = (on, detail) => {
+  if (!on) { setControlsEnabled(false); }
   const status = $("status");
   status.className = `chip ${on ? "on" : "off"}`;
   status.textContent = t(on ? "status_on" : "status_off");
@@ -533,6 +540,7 @@ const detectVia = async (detail) => {
     return;
   }
   via = client;
+  setControlsEnabled(true);
   viaChannel = found.channel;
   const { brightness, speed, effect, hue, saturation } = found.values;
   profile = validateProfile({
@@ -566,6 +574,7 @@ const detectNj81 = async () => {
   }
   const display = Boolean(model.screen) || await client.hasDisplay().catch(() => false);
   nj = { client, ...id, model, display };
+  setControlsEnabled(true);
   try {
     const [light, active] = [await client.readLight(), await client.profile().catch(() => null)];
     profile = validateProfile({
@@ -897,6 +906,7 @@ const init = () => {
   $("apply").addEventListener("click", apply);
 
   buildKeyboard();
+  queueMicrotask(() => setControlsEnabled(false));   // after the gallery and swatches exist
   applyCaps((() => { try { return localStorage.getItem(CAPS_KEY); } catch (error) { return null; } })() === "black" ? "black" : "white");
   $("caps").addEventListener("change", (event) => { applyCaps(event.target.value); event.target.blur(); });
   updateScreenControls();

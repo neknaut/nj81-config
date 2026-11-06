@@ -105,8 +105,8 @@ progress { width: 100%; margin-top: 10px; }
 .links { margin: 6px 0 0; padding-left: 18px; }
 .links a { color: inherit; }
 .grow { flex: 1; }
-.swatches { display: flex; gap: 6px; flex-wrap: wrap; margin-top: 6px; }
-.swatch { width: 26px; height: 26px; padding: 0; border-radius: 50%; box-shadow: 1px 1px 0 var(--line); }
+.swatches { display: flex; gap: 5px; flex-wrap: wrap; margin-top: 6px; }
+.swatch { width: 20px; height: 20px; padding: 0; border-radius: 50%; box-shadow: 1px 1px 0 var(--line); }
 .log-line { padding: 1px 0; }
 .log-ok { color: #1f8a4c; }
 .log-warn { color: #a86400; font-weight: 700; }
@@ -116,3 +116,11 @@ progress { width: 100%; margin-top: 10px; }
 .status { border-collapse: collapse; margin-top: 10px; min-width: 320px; }
 .status th, .status td { border-bottom: 1px solid var(--soft); padding: 3px 10px 3px 0; text-align: left; }
 .status td.bad { font-weight: 700; }
+/* lighting controls: labels on one line, controls aligned to the top, no stretched menus */
+#light-card .controls { align-items: start; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); }
+#light-card .controls > label { align-content: start; gap: 6px; }
+#light-card .controls > label > span:first-child { min-height: 1.4em; }
+#light-card select, #light-card input[type="color"] { height: 42px; }
+#light-card input[type="range"] { height: 42px; margin: 0; }
+.start-hint { text-align: center; padding: 28px 18px; }
+.start-hint p { margin: 0; color: var(--muted); }
