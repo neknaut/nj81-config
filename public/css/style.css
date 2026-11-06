@@ -60,3 +60,5 @@ button:focus-visible, input:focus-visible, select:focus-visible, summary:focus-v
 .screen { width: 100%; max-width: 384px; image-rendering: pixelated; background: #000; border: 2px solid var(--line); border-radius: 8px; display: block; }
 .log { background: var(--soft); border: 2px solid var(--line); border-radius: 10px; padding: 8px 10px; max-height: 220px; overflow: auto; white-space: pre-wrap; word-break: break-all; margin: 0; }
 footer { margin-top: 20px; text-align: center; }
+.key.down { outline: 2px solid #fff; outline-offset: -2px; transform: translateY(1px); }
+progress { width: 100%; margin-top: 10px; }
