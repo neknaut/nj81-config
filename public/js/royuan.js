@@ -215,6 +215,9 @@ export class Royuan {
 
   family = "gen2";
 
+  /* When the last flash write went out (this.now() clock), for the page's timing in the log. */
+  get lastWriteAt() { return this.#lastWrite; }
+
   /* A read whose reply may not echo the opcode (keymap pages): send, settle, take what comes. */
   rawRead(op, payload = []) {
     return this.#serial(async () => {

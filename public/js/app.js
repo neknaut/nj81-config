@@ -860,8 +860,10 @@ const pushNj81 = async () => {
   while (njDirty && nj) {
     njDirty = false;
     const settings = njSettings();
+    const asked = Date.now();
     try {
       let { light, diffs } = await nj.client.writeLight(settings);
+      const sentAfter = Math.max(0, Math.round(nj.client.lastWriteAt - asked));   // waiting for the flash gap or a busy keyboard
       let retried = false;
       if (diffs.length && !njDirty) {   // not taken: send the same once more (a write can be dropped while the keyboard is busy)
         log(`${t("retrying")}: ${describeDiffs(diffs, settings.mode)}`, "info", "areaLight");
@@ -874,7 +876,8 @@ const pushNj81 = async () => {
       showStatus(settings, light, diffs);
       const typing = !settings.off && reactiveModes().has(settings.mode) ? ` · ${t("reactiveNote")}` : "";
       setConfirm(!diffs.length);
-      if (!diffs.length) { logOk("areaLight", `${t("applied")}${retried ? ` (${t("afterRetry")})` : ""}: ${describeNj(settings)}${typing}`); }
+      const timing = ` (${t("sentAfter")} ${sentAfter} ms, ${t("confirmedAfter")} ${Date.now() - asked} ms)`;
+      if (!diffs.length) { logOk("areaLight", `${t("applied")}${retried ? ` (${t("afterRetry")})` : ""}: ${describeNj(settings)}${typing}${timing}`); }
       else { logWarn("areaLight", `${t("notApplied")} ${settings.off ? t("lightsOff") : modeLabel(settings.mode)}: ${describeDiffs(diffs, settings.mode)}`); }
     } catch (error) { logError("areaLight", `${t("applyFailed")}: ${why(error)}`); }
   }
