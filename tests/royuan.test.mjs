@@ -401,3 +401,31 @@ test("NJ81-ED screen: one announce (slot at byte 18, frame count, delay in ms, t
   assert.deepEqual(sent.filter((p) => p[0] === OP.PICTURE_DATA).map((p) => [...p.subarray(1, 7)]), [[0, 3, 83, 0, 0, 8], [1, 3, 83, 0, 0, 8], [2, 3, 83, 0, 0, 8]]);
   await assert.rejects(() => nj.uploadScreen([f1], { width: w, height: h, slots: 5 }, { slot: 5 }), RoyuanError);
 });
+
+test("a read refused right after a write is tried again; still refused: sent but unconfirmed, not a failure", async () => {
+  const { transport, state } = fakeNj81Ed();
+  let refuse = 2;
+  const flaky = { ...transport, async getFeature() { if (state.sent.at(-1)?.[0] === 0x87 && refuse > 0) { refuse -= 1; throw new Error("Failed to receive the feature report."); } return transport.getFeature(); } };
+  const nj = new Royuan(flaky, fast);
+  nj.family = "yc500";
+  const ok = await nj.writeLight({ mode: 4, speed: 4, brightness: 3, option: 1, color: "#0000ff", off: false });
+  assert.deepEqual(ok.diffs, [], "confirmed after the refused reads");
+  refuse = Infinity;
+  const later = await nj.writeLight({ mode: 5, speed: 4, brightness: 3, option: 0, color: "#0000ff", off: false });
+  assert.equal(later.unconfirmed, true);
+  assert.equal(state.light[0], 5, "the change itself went out");
+});
+
+test("the read-back gives the line back at once: a newer change waiting stops it while the keyboard still refuses reads", async () => {
+  const { transport, state } = fakeNj81Ed();
+  const refusing = { ...transport, async getFeature() { if (state.sent.at(-1)?.[0] === 0x87) { throw new Error("Failed to receive the feature report."); } return transport.getFeature(); } };
+  let clock = 0;
+  const nj = new Royuan(refusing, { now: () => clock, sleep: async (ms) => { clock += ms; }, timing: { writeGapMs: 0, settleMs: 0, pageGapMs: 0, readyGapMs: 0 } });
+  nj.family = "yc500";
+  let newer = false;
+  setTimeout(() => {}, 0);
+  const start = clock;
+  const result = await nj.writeLight({ mode: 5, speed: 4, brightness: 3, option: 0, color: "#0000ff", off: false }, { superseded: () => { if (clock - start > 300) { newer = true; } return newer; } });
+  assert.equal(result.superseded, true);
+  assert.ok(clock - start < 800, `stopped soon after the newer change came (${clock - start} ms)`);
+});

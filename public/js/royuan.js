@@ -118,7 +118,8 @@ const build = (op, payload = [], bit8 = false) => {
 };
 /* The official driver's "Clear" (captured on an NJ81-ED): AC 00 00 00 00 00 00 53, nothing else. */
 export const clearScreenPacket = () => build(0xac);
-export const CLEAR_MS = 42000;   // how long an NJ81-ED took to clear (40.8 s and 42.8 s in the capture), for the progress bar
+export const CLEAR_MS = 42000;
+export const CHECK_MS = 2500;   // how long a lighting change is checked after it went out before it is reported unconfirmed   // how long an NJ81-ED took to clear (40.8 s and 42.8 s in the capture), for the progress bar
 export const packet = (op, payload = [], bit8 = false) => {
   if (FORBIDDEN.has(op)) { throw new RoyuanError(`Opcode 0x${op.toString(16)} is not allowed in this app`); }
   return build(op, payload, bit8);
@@ -280,6 +281,7 @@ export const TIMING = { writeGapMs: 1000, settleMs: 20, pageGapMs: 5, readyGapMs
 export class Royuan {
   #queue = Promise.resolve();
   #lastWrite = -Infinity;
+  #writes = 0;   // flash writes so far (two writes can share a millisecond)
   constructor(transport, { sleep = wait, now = () => Date.now(), timing = TIMING } = {}) {
     this.transport = transport; this.sleep = sleep; this.now = now; this.timing = timing;
   }
@@ -299,6 +301,7 @@ export class Royuan {
     if (waitMs > 0) { await this.sleep(waitMs); }
     await this.#send(typeof data === "function" ? data() : data);
     this.#lastWrite = this.now();
+    this.#writes += 1;
   }
 
   /* A GET: send the bare opcode, read until the reply echoes it. */
@@ -373,6 +376,33 @@ export class Royuan {
     return light;
   }
 
+  /* A quick GET for the read-back: the request is sent as usual, then the reply is read with single tries a few times;
+     a refusal ends it at once (RoyuanError "busy") instead of the transport's retries, so the line is free again. */
+  #quickGet(op, payload = []) {
+    return this.#serial(async () => {
+      await this.#send(packet(op, payload));
+      const once = this.transport.getFeatureOnce ?? this.transport.getFeature;
+      for (let attempt = 1; attempt <= 4; attempt += 1) {
+        await this.sleep(this.timing.settleMs * attempt);
+        let reply;
+        try { reply = await once(); } catch (error) { throw Object.assign(new RoyuanError("busy"), { busy: true }); }
+        if (reply[0] === op && !reply.every((v) => v === 0xff)) { return reply; }
+      }
+      throw Object.assign(new RoyuanError("busy"), { busy: true });
+    });
+  }
+
+  async #quickReadLight() {
+    const light = decodeLight(await this.#quickGet(OP.GET_LIGHT), this.family);
+    const options = FAMILIES[this.family].options;
+    if (options) {
+      const reply = await this.#quickGet(options.get, [0]);
+      this.#options = { reply, at: this.now() };
+      light.off = Boolean(reply[2] & LED_OFF_BIT);
+    }
+    return light;
+  }
+
   /* yc500: backlight on/off is a bit in the options register, written read-modify-write. */
   async #setLedOff(off) {
     const options = FAMILIES[this.family].options;
@@ -400,9 +430,9 @@ export class Royuan {
      of this change went out, on the this.now() clock, or null if nothing had to be written). */
   async writeLight(settings, { superseded = () => false, onSent = () => {} } = {}) {
     const yc500 = Boolean(FAMILIES[this.family].options);
-    const before = this.#lastWrite;
+    const before = this.#writes;
     let sentAt = null;
-    const wrote = () => { if (sentAt === null && this.#lastWrite !== before) { sentAt = this.#lastWrite; onSent(); } };
+    const wrote = () => { if (sentAt === null && this.#writes !== before) { sentAt = this.#lastWrite; onSent(); } };
     if (yc500 && settings.off) {
       // effect 0. The backlight-off bit is NOT written: on the NJ81-ED writing it changes only the stored value, the lights
       // stay on, and the keyboard's own off key then needs two presses (its first press only brings the bit back in step).
@@ -415,8 +445,9 @@ export class Royuan {
       // but only if it differs from the stored one (a needless write costs the one-second flash gap)
       await this.#setLedOff(false);
       wrote();
-      const stored = decodeLight(await this.get(OP.GET_LIGHT), this.family);
-      if (lightDifferences({ ...settings, off: false }, { ...stored, off: false }).length) {
+      let stored = null;
+      try { stored = decodeLight(await this.get(OP.GET_LIGHT), this.family); } catch (error) { /* refused while busy: write the effect anyway */ }
+      if (!stored || lightDifferences({ ...settings, off: false }, { ...stored, off: false }).length) {
         await this.#serial(() => this.#write(encodeLight(settings, this.family)));
         await this.#quietAfterWrite(superseded);
       }
@@ -427,14 +458,31 @@ export class Royuan {
     }
     let light;
     let diffs = [];
-    for (let read = 0; read < 3; read += 1) {
-      if (read) {
-        if (superseded()) { return { light, diffs, sentAt, superseded: true }; }
-        await this.sleep(250);
+    // The read-back. Right after a write the NJ81-ED refuses reads for about a second while the change has gone through,
+    // so each check is a single quick try that gives the line back at once; between checks it waits in 50 ms steps and
+    // stops as soon as newer settings are waiting (they go out next). Up to CHECK_MS after the write: then the change is
+    // reported sent but unconfirmed, and the page's own watch reads the keyboard again a moment later.
+    const started = this.now();
+    const pause = async (ms) => { for (let waited = 0; waited < ms; waited += 50) { if (superseded()) { return true; } await this.sleep(Math.min(50, ms - waited)); } return superseded(); };
+    let matched = 0;
+    while (this.now() - started < CHECK_MS) {
+      if (superseded()) { return { light, diffs, sentAt, superseded: true }; }
+      try {
+        light = await this.#quickReadLight();
+      } catch (error) {
+        if (!error.busy) { throw error; }
+        if (await pause(200)) { return { light, diffs, sentAt, superseded: true }; }
+        continue;
       }
-      light = await this.readLight();
       diffs = lightDifferences(settings, light);
-      if (!diffs.length) { break; }
+      if (!diffs.length) { return { light, diffs, sentAt, superseded: false }; }
+      matched += 1;   // it can still answer with its previous state for a moment
+      if (matched >= 3) { break; }
+      if (await pause(250)) { return { light, diffs, sentAt, superseded: true }; }
+    }
+    if (!light) {
+      if (sentAt === null) { throw new RoyuanError("The keyboard did not answer (use the USB cable and close the official driver)"); }
+      return { light: null, diffs: [], sentAt, superseded: false, unconfirmed: true };
     }
     return { light, diffs, sentAt, superseded: false };
   }

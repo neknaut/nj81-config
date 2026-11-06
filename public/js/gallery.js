@@ -25,7 +25,7 @@ const HEART = ["0110110", "1111111", "1111111", "0111110", "0011100", "0001000"]
 const CAT = ["1000001", "1100011", "1111111", "1212121", "1111111", "1131311", "0111110"];
 
 export const GALLERY = [
-  { id: "logo", name: "NJ81", draw: (ctx, w, h) => { ctx.fillStyle = "#000"; ctx.fillRect(0, 0, w, h); text(ctx, "NJ81", w / 2, h / 2, h * 0.42, "#8fd3ff"); } },
+  { id: "logo", name: "Nek NauT", draw: (ctx, w, h) => { ctx.fillStyle = "#000"; ctx.fillRect(0, 0, w, h); text(ctx, "Nek NauT", w / 2, h / 2, h * 0.3, "#fff"); } },
   { id: "sunset", name: "Hoàng hôn · Sunset", draw: (ctx, w, h) => {
     fill(ctx, w, h, ["#2b1055", "#d53369", "#ffb347"], true);
     ctx.fillStyle = "#ffe29a"; ctx.beginPath(); ctx.arc(w / 2, h * 0.78, h * 0.28, Math.PI, 0); ctx.fill();
