@@ -13,7 +13,7 @@ const fakeNj81 = ({ deviceId = 2454 } = {}) => {
       const reply = new Uint8Array(64);
       reply[0] = data[0];
       if (data[0] === OP.IDENTIFY) { reply.set([deviceId & 0xff, (deviceId >> 8) & 0xff, 0, 0], 1); reply[7] = 0x13; reply[8] = 0x04; }
-      if (data[0] === OP.GET_PROFILE) { reply[1] = 1; }
+      if (data[0] === 0x84) { reply[1] = 1; }
       if (data[0] === OP.SET_LIGHT) { state.light = [...data.subarray(1, 8)]; return; }
       if (data[0] === OP.GET_LIGHT) { reply.set(state.light, 1); }
       if (data[0] === OP.PICTURE_ANNOUNCE) { reply[1] = state.announceReady ? 1 : 0; }
@@ -55,7 +55,7 @@ test("identifies a NJ81-CP and reads its lighting and profile", async () => {
   assert.deepEqual([id.deviceId, id.firmware, id.model.name, id.model.screen.width], [2454, "0413", "NJ81-CP", 160]);
   assert.equal(await nj.profile(), 1);
   assert.deepEqual(await nj.readLight(), { mode: 1, speed: 2, brightness: 3, option: 0, rainbow: false, color: "#ff0000" });
-  assert.equal(modelFor(1493).family, "yc500");
+  assert.equal(modelFor(873).family, "unknown");
 });
 
 test("writing lighting is read back", async () => {
@@ -133,4 +133,62 @@ test("off is brightness 0, and the menu follows the manufacturer's order", async
   assert.deepEqual(MODES.map((m) => m.mode), [4, 5, 6, 7, 8, 9, 10, 11, 19, 12, 14, 15, 16, 17, 18, 1, 2, 3]);
   assert.equal(isOff({ mode: 4, brightness: 0 }), true);
   assert.equal(isOff({ mode: 4, brightness: 2 }), false);
+});
+
+/* A fake NJ81-ED (device 873, yc500 command set): keymap on 0x89, FF on 0x8A, backlight-off in the options register. */
+const fakeNj81Ed = () => {
+  const keymapPage = new Uint8Array(64);
+  for (let i = 0; i < 16; i += 1) { keymapPage.set([0, 0, 4 + i, 0], i * 4); }
+  const state = { light: [2, 5, 4, 0x07, 0, 0xff, 0], options: 0x10 | 0x02, sent: [], pending: new Uint8Array(64) };
+  const transport = {
+    async setFeature(data) {
+      state.sent.push(Uint8Array.from(data));
+      const r = new Uint8Array(64);
+      r[0] = data[0];
+      switch (data[0]) {
+        case 0x8f: r.set([873 & 0xff, 873 >> 8, 0, 0], 1); r[7] = 0x70; break;
+        case 0x89: state.pending = keymapPage; return;
+        case 0x8a: state.pending = new Uint8Array(64).fill(0xff); return;
+        case 0x91: case 0x92: break;
+        case 0x85: r[1] = 0; break;
+        case 0x86: r[2] = state.options; r[3] = 1; r[4] = 2; break;
+        case 0x06: state.options = data[2]; return;
+        case 0x87: r.set(state.light, 1); break;
+        case 0x07: state.light = [...data.subarray(1, 8)]; return;
+        case 0xad: r.set([8, 1], 1); break;
+        default: return;
+      }
+      state.pending = r;
+    },
+    async getFeature() { return state.pending; },
+  };
+  return { transport, state };
+};
+
+test("an NJ81-ED is recognised as yc500 by reads only, and its lights can be switched off and on", async () => {
+  const { transport, state } = fakeNj81Ed();
+  const nj = new Royuan(transport, fast);
+  assert.equal((await nj.identify()).model.name, "NJ81-ED");
+  assert.equal(await nj.probeFamily(), "yc500");
+  assert.ok(state.sent.every((p) => p[0] & 0x80), "probing sent only GETs");
+  nj.family = "yc500";
+  assert.equal(await nj.hasDisplay(), true);
+  const light = await nj.readLight();
+  assert.deepEqual([light.mode, light.speed, light.brightness, light.off], [2, 0, 4, true]);   // wire speed 5 = slowest
+  assert.equal(await nj.profile(), 0);
+
+  const on = await nj.writeLight({ mode: 4, speed: 4, brightness: 3, option: 1, color: "#0000ff", off: false });
+  assert.equal(on.kept, true);
+  assert.deepEqual(state.light.slice(0, 4), [4, 1, 3, 0x17]);   // speed 4 goes out as 1 on yc500
+  assert.equal(state.options, 0x00, "backlight-off bit cleared, Mac-mode bit not written back");
+  const off = await nj.writeLight({ mode: 4, speed: 4, brightness: 3, option: 1, color: "#0000ff", off: true });
+  assert.equal(off.kept, true);
+  assert.equal(state.options & 0x10, 0x10);
+  assert.deepEqual(state.sent.filter((p) => p[0] === 0x06).map((p) => [...p.subarray(1, 5)]), [[0, 0x00, 1, 2], [0, 0x10, 1, 2]]);
+});
+
+test("a board that fits neither family stays unknown", async () => {
+  const { detectFamily } = await import("../public/js/royuan.js");
+  const zero = new Uint8Array(64);
+  assert.equal(detectFamily({ r89: zero, r8a: zero, r91: zero, r92: zero }), null);
 });

@@ -12,7 +12,8 @@ A web app to edit the **RGB lighting and the screen** of the Keydous NJ81 keyboa
 > driver uses). The app now speaks it for the **NJ81-CP, NJ81-CP V3, NJ81-MAX and NJ81-MAX CP**: on *Connect* it identifies the model,
 > **reads the current lighting** (effect, direction, colour or rainbow, brightness, speed, profile) and every change in the page is
 > written to the keyboard and read back. The 160×80 screen takes still pictures in its 5 slots and the clock can be synced.
-> Older NJ81 boards (yc500 generation) are recognised but read-only. Tested against a simulated keyboard only, not yet on real
+> Older NJ81 boards (NJ81, NJ81S, NJ81-ED: the yc500 command set) are recognised by asking the board with read-only commands,
+> then lighting (with lights off) and the clock work too; their screen size is not on file, so pictures are not sent to them. Tested against a simulated keyboard only, not yet on real
 > hardware. Use the **USB cable** and close the official driver first (only one program can talk to the keyboard).
 >
 > Limits: the keyboard cannot report which picture its screen shows, so the page cannot display it; GIFs, key remapping and

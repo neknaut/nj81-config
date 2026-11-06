@@ -1,4 +1,4 @@
-/* The vendor protocol the Keydous NJ81-CP / NJ81-MAX family speaks ("ROYUAN gen2"), the same one the official Keydous driver uses.
+/* The vendor protocol Keydous NJ81 keyboards speak ("ROYUAN", gen2 and the older yc500 command set), the one the official driver uses.
    64-byte HID feature reports, report ID 0, on the vendor collection (usage page 0xFFFF). Facts from the public protocol notes of
    sharkfin (docs/PROTOCOL.md) and the NJ81 records of the vendor's device table; this file is an independent implementation.
 
@@ -6,7 +6,7 @@
    screen. Deliberately NOT implemented: reset (0x01), flash erase (0xAC / 0x2C), boot entry (0x7F / 0x30), firmware of any kind. */
 
 export const ROYUAN = { USAGE_PAGE: 0xffff, USAGES: [1, 2], VENDOR_IDS: [0x3151, 0x39ab], SIZE: 64, PAGE: 56 };
-export const OP = { IDENTIFY: 0x8f, GET_PROFILE: 0x84, SET_LIGHT: 0x07, GET_LIGHT: 0x87, CLOCK: 0x28, PICTURE_ANNOUNCE: 0xa5, PICTURE_DATA: 0x25 };
+export const OP = { IDENTIFY: 0x8f, SET_LIGHT: 0x07, GET_LIGHT: 0x87, CLOCK: 0x28, PICTURE_ANNOUNCE: 0xa5, PICTURE_DATA: 0x25 };
 const FORBIDDEN = new Set([0x01, 0x02, 0x2c, 0xac, 0x7f, 0x30, 0x31]);
 
 /* Keydous NJ81 records (device id -> model). Only gen2 boards are writable; the older yc500 NJ81s are recognised but read-only. */
@@ -16,11 +16,47 @@ export const MODELS = {
   3459: { name: "NJ81-CP V3", family: "gen2", profiles: 3, screen: SCREEN },
   4140: { name: "NJ81-MAX", family: "gen2", profiles: 2, screen: SCREEN },
   4207: { name: "NJ81-MAX CP", family: "gen2", profiles: 4, screen: SCREEN },
-  732: { name: "NJ81 (older firmware)", family: "yc500" }, 819: { name: "NJ81S", family: "yc500" }, 873: { name: "NJ81-ED", family: "yc500" },
-  1475: { name: "NJ81-CP (older firmware)", family: "yc500" }, 1493: { name: "NJ81 (older firmware)", family: "yc500" },
+  // Older NJ81s: the vendor table does not say which command set they use, so the app asks the board (probeFamily).
+  // Their firmware names say yc500; the NJ81-ED's ("v504_oledv504") has a display, size not on file.
+  732: { name: "NJ81", family: "unknown" }, 819: { name: "NJ81S", family: "unknown" }, 873: { name: "NJ81-ED", family: "unknown" },
+  1475: { name: "NJ81-CP (older)", family: "unknown" }, 1493: { name: "NJ81", family: "unknown" },
 };
 export const modelFor = (deviceId) => MODELS[deviceId] ?? { name: `Unknown keyboard (id ${deviceId})`, family: "unknown" };
 export const isWritable = (model) => model.family === "gen2";
+
+/* The two command sets. Opcodes collide between them (yc500 0x06 is gen2 debounce...), so nothing family-specific is sent
+   before the family is known. Lighting (0x07/0x87) and the clock (0x28) are the same in both. */
+export const FAMILIES = {
+  gen2: { profile: 0x84, speedTop: 4 },                                      // speed on the wire 4..0
+  yc500: { profile: 0x85, speedTop: 5, options: { get: 0x86, set: 0x06 } },  // speed on the wire 5..1; backlight off is an options bit
+};
+const LED_OFF_BIT = 0x10;
+const OPTION_BITS_KEPT = 0b1110_1001;   // win lock, WASD swap, side light off, high bits; the Mac-mode bits are not written back
+
+/* Family from replies to harmless reads, as sharkfin does it: yc500 answers 0x89 with a keymap page and 0x8A with all FF;
+   gen2 echoes 0x89 (its options) and answers 0x8A with the keymap. Sleep timers sit at different places and must not
+   contradict. Anything else stays unknown (read only). */
+const plainKeys = (page) => {
+  let n = 0;
+  for (let i = 0; i + 4 <= 64; i += 4) { if (page[i] === 0 && page[i + 1] === 0 && page[i + 2] >= 4 && page[i + 2] <= 0xe7 && page[i + 3] === 0) { n += 1; } }
+  return n;
+};
+const isKeymap = (page) => page.length >= 64 && plainKeys(page) >= 8;
+const allFF = (page) => page.length >= 64 && page.subarray(0, 64).every((v) => v === 0xff);
+const sleepAt = (reply, at) => {
+  for (let i = 0; i < 4; i += 1) {
+    const v = reply[at + 2 * i] | (reply[at + 2 * i + 1] << 8);
+    if (!(v >= 30 && v <= 36000)) { return false; }
+  }
+  return true;
+};
+export const detectFamily = ({ r89, r8a, r91, r92 }) => {
+  const yc500 = isKeymap(r89) && allFF(r8a);
+  const gen2 = isKeymap(r8a) && !isKeymap(r89) && r89[0] === 0x89;
+  if (yc500 && !gen2 && !sleepAt(r91, 8)) { return "yc500"; }
+  if (gen2 && !yc500 && !sleepAt(r92, 1)) { return "gen2"; }
+  return null;
+};
 
 /* The NJ81's lighting table ("v" in the vendor's driver), in the manufacturer's order, with its direction options.
    Static has no speed; Spectrum has no colour. `OFF` is the app's "lights off": the current effect at brightness 0. */
@@ -64,21 +100,22 @@ const hexBytes = (hex) => {
   return [1, 3, 5].map((i) => parseInt(hex.slice(i, i + 2), 16));
 };
 
-export const encodeLight = ({ mode, speed, brightness, option = 0, rainbow = false, color }) => {
+export const encodeLight = ({ mode, speed, brightness, option = 0, rainbow = false, color }, family = "gen2") => {
   if (!modeInfo(mode)) { throw new RoyuanError(`Unknown lighting mode ${mode}`); }
   if (!Number.isInteger(option) || option < 0 || option > (modeInfo(mode).options?.length ?? 1) - 1) { throw new RoyuanError("Bad direction option"); }
   let rgb = hexBytes(color);
   if (rgb.every((v) => v === 0xff)) { rgb = [0xfa, 0xfa, 0xfa]; }   // the firmware wants pure white sent as FA FA FA
-  return packet(OP.SET_LIGHT, [mode, LEVELS - level(speed, "speed"), level(brightness, "brightness"), (option << 4) | (rainbow ? RAINBOW : FIXED), ...rgb], true);
+  const top = FAMILIES[family].speedTop;
+  return packet(OP.SET_LIGHT, [mode, top - level(speed, "speed"), level(brightness, "brightness"), (option << 4) | (rainbow ? RAINBOW : FIXED), ...rgb], true);
 };
 
-export const decodeLight = (reply) => {
+export const decodeLight = (reply, family = "gen2") => {
   if (reply[0] !== OP.GET_LIGHT) { throw new RoyuanError("Not a lighting reply"); }
   const flags = reply[4] & 0x0f;
   const hex = "#" + [...reply.subarray(5, 8)].map((v) => v.toString(16).padStart(2, "0")).join("");
   return {
     mode: reply[1],
-    speed: LEVELS - Math.min(LEVELS, reply[2]),
+    speed: Math.max(0, Math.min(LEVELS, FAMILIES[family].speedTop - reply[2])),
     brightness: Math.min(LEVELS, reply[3]),
     option: reply[4] >> 4,
     rainbow: flags === RAINBOW,
@@ -174,16 +211,64 @@ export class Royuan {
     return { deviceId, firmware: ((reply[8] << 8) | reply[7]).toString(16).padStart(4, "0"), model: modelFor(deviceId) };
   }
 
-  async profile() { return (await this.get(OP.GET_PROFILE))[1]; }
-  async readLight() { return decodeLight(await this.get(OP.GET_LIGHT)); }
+  family = "gen2";
+
+  /* A read whose reply may not echo the opcode (keymap pages): send, settle, take what comes. */
+  rawRead(op, payload = []) {
+    return this.#serial(async () => {
+      await this.#send(packet(op, payload));
+      await this.sleep(this.timing.settleMs * 2);
+      return this.transport.getFeature();
+    });
+  }
+
+  /* Asks the board which command set it speaks. Only reads. Returns "gen2", "yc500" or null. */
+  async probeFamily() {
+    const r89 = await this.rawRead(0x89, [0, 0]);
+    const r8a = await this.rawRead(0x8a, [0, 0xff, 0, 0]);
+    const r91 = await this.rawRead(0x91);
+    const r92 = await this.rawRead(0x92);
+    return detectFamily({ r89, r8a, r91, r92 });
+  }
+
+  /* A board with a display answers 0xAD (display firmware version); one without echoes the previous reply. */
+  async hasDisplay() {
+    const before = await this.rawRead(OP.GET_LIGHT);
+    const reply = await this.rawRead(0xad);
+    return reply[0] === 0xad && !reply.every((v, i) => v === before[i]);
+  }
+
+  async profile() { return (await this.get(FAMILIES[this.family].profile))[1]; }
+
+  async readLight() {
+    const light = decodeLight(await this.get(OP.GET_LIGHT), this.family);
+    const options = FAMILIES[this.family].options;
+    if (options) { light.off = Boolean((await this.get(options.get, [0]))[2] & LED_OFF_BIT); }
+    return light;
+  }
+
+  /* yc500: backlight on/off is a bit in the options register, written read-modify-write. */
+  async #setLedOff(off) {
+    const options = FAMILIES[this.family].options;
+    const now = await this.get(options.get, [0]);
+    if (Boolean(now[2] & LED_OFF_BIT) === off) { return; }
+    const flags = (now[2] & OPTION_BITS_KEPT & ~LED_OFF_BIT) | (off ? LED_OFF_BIT : 0);
+    await this.#serial(() => this.#write(packet(options.set, [0, flags, now[3], now[4]])));
+    await this.sleep(150);
+  }
 
   /* Writes the lighting and reads it back; `kept` says whether the keyboard reports exactly what was sent. */
+  /* `settings.off`: gen2 turns the lights off as the effect at brightness 0, yc500 with its options bit. */
   async writeLight(settings) {
-    const data = encodeLight(settings);
+    const yc500 = Boolean(FAMILIES[this.family].options);
+    if (yc500 && settings.off) { await this.#setLedOff(true); return { kept: (await this.readLight()).off === true, light: await this.readLight() }; }
+    const data = encodeLight(yc500 || !settings.off ? settings : { ...settings, brightness: 0 }, this.family);
     await this.#serial(() => this.#write(data));
     await this.sleep(150);
+    if (yc500) { await this.#setLedOff(false); }
     const reply = await this.get(OP.GET_LIGHT);
-    return { kept: data.subarray(1, 8).every((v, i) => v === reply[1 + i]), light: decodeLight(reply) };
+    const light = await this.readLight();
+    return { kept: data.subarray(1, 8).every((v, i) => v === reply[1 + i]) && (!yc500 || !light.off), light };
   }
 
   /* `date` can be a function: it is then read at the moment the packet goes out, after any wait. */
@@ -212,4 +297,4 @@ export class Royuan {
 }
 
 /* "Off" is shown when the keyboard reports brightness 0 (or effect 0). */
-export const isOff = (light) => light.brightness === 0 || light.mode === OFF;
+export const isOff = (light) => light.off === true || light.brightness === 0 || light.mode === OFF;
