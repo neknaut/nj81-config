@@ -184,3 +184,15 @@ export const parseDefinition = (input) => {
 
 export const gridKeys = (rows, cols) =>
   Array.from({ length: rows * cols }, (_, i) => ({ row: Math.floor(i / cols), col: i % cols, x: i % cols, y: Math.floor(i / cols), w: 1, h: 1 }));
+
+/* QMK's default RGB matrix effect order. The numbers a keyboard really uses depend on its firmware build, so the app shows the
+   number next to the name and reads the current one from the keyboard. */
+const NAMED = ["None (off)", "Solid Color", "Alphas Mods", "Gradient Up Down", "Gradient Left Right", "Breathing", "Band Sat", "Band Val",
+  "Band Pinwheel Sat", "Band Pinwheel Val", "Band Spiral Sat", "Band Spiral Val", "Cycle All", "Cycle Left Right", "Cycle Up Down",
+  "Rainbow Moving Chevron", "Cycle Out In", "Cycle Out In Dual", "Cycle Pinwheel", "Cycle Spiral", "Dual Beacon", "Rainbow Beacon",
+  "Rainbow Pinwheels", "Raindrops", "Jellybean Raindrops", "Hue Breathing", "Hue Pendulum", "Hue Wave", "Pixel Fractal", "Pixel Flow", "Pixel Rain",
+  "Typing Heatmap", "Digital Rain", "Solid Reactive Simple", "Solid Reactive", "Solid Reactive Wide", "Solid Reactive Multiwide",
+  "Solid Reactive Cross", "Solid Reactive Multicross", "Solid Reactive Nexus", "Solid Reactive Multinexus", "Splash", "Multisplash",
+  "Solid Splash", "Solid Multisplash"];
+export const RGB_EFFECTS = Array.from({ length: 64 }, (_, id) => ({ id, label: NAMED[id] ? `${id} · ${NAMED[id]}` : `${id} · Effect ${id}` }));
+export const previewEffectFor = (id) => ({ 0: "off", 1: "static", 5: "breathing", 12: "spectrum", 13: "wave", 33: "reactive", 34: "reactive" }[id] ?? "static");

@@ -49,3 +49,22 @@ export const rgbaToRgb565Bytes = (rgba, littleEndian = true) => {
   }
   return out;
 };
+
+/* #rrggbb <-> QMK hue / saturation bytes (0-255), at full value; brightness is a separate setting in the firmware. */
+export const hexToHueSat = (hex) => {
+  const [red, green, blue] = hexToRgb(hex).map((value) => value / 255);
+  const max = Math.max(red, green, blue);
+  const delta = max - Math.min(red, green, blue);
+  let hue = 0;
+  if (delta > 0) {
+    if (max === red) { hue = ((green - blue) / delta) % 6; } else if (max === green) { hue = (blue - red) / delta + 2; } else { hue = (red - green) / delta + 4; }
+  }
+  hue = ((hue * 60) + 360) % 360;
+  return { hue: Math.round((hue / 360) * 255) % 256, saturation: Math.round((max === 0 ? 0 : delta / max) * 255) };
+};
+
+export const hueSatToHex = (hue, saturation) => {
+  const sat = clamp(saturation, 0, 255) / 255;
+  const [red, green, blue] = hslToRgb((hue / 256) * 360, 1, 0.5).map((value) => 255 - sat * (255 - value));
+  return rgbToHex(red, green, blue);
+};

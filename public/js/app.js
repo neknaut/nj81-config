@@ -3,8 +3,9 @@ import { EFFECTS, SCREEN_LIMIT, defaultProfile, parseProfile, serializeProfile, 
 import { KEYS, LAYOUT_HEIGHT, LAYOUT_WIDTH } from "./layout.js";
 import { keyColor } from "./lighting.js";
 import { HidSession, hex4, hidSupported } from "./hid.js";
-import { Nj81Driver, SimulationDriver } from "./drivers.js";
-import { bytesToHex, hexToBytes, rgbToHex, rgbaToRgb565Bytes } from "./util.js";
+import { Nj81Driver, SimulationDriver, ViaDriver } from "./drivers.js";
+import { CHANNEL, RGB_EFFECTS, VIA, Via, previewEffectFor } from "./via.js";
+import { bytesToHex, hexToBytes, hexToHueSat, hueSatToHex, rgbToHex, rgbaToRgb565Bytes } from "./util.js";
 import { languages, setLanguage, t } from "./i18n.js";
 
 const $ = (id) => document.getElementById(id);
@@ -16,6 +17,8 @@ const pressed = new Set();
 const session = new HidSession();
 const keyEls = new Map();
 let screenPixels = null;
+let via = null;          // a Via client once a VIA keyboard answered
+let viaChannel = null;   // which RGB channel of the keyboard we control
 
 /* ---------- log ---------- */
 const log = (message) => {
@@ -41,7 +44,10 @@ const readForm = () => {
   const next = validateProfile({
     ...profile,
     name: $("profile-name").value,
-    lighting: { ...profile.lighting, effect: $("effect").value, color: $("color").value, brightness: $("brightness").value, speed: $("speed").value },
+    lighting: {
+      ...profile.lighting, color: $("color").value, brightness: $("brightness").value, speed: $("speed").value,
+      ...(via ? { viaEffect: Number($("effect").value), effect: previewEffectFor(Number($("effect").value)) } : { effect: $("effect").value }),
+    },
     screen: { ...profile.screen, width: $("screen-w").value, height: $("screen-h").value },
   }).profile;
   profile = next;
@@ -49,7 +55,7 @@ const readForm = () => {
 
 const writeForm = () => {
   $("profile-name").value = profile.name;
-  $("effect").value = profile.lighting.effect;
+  $("effect").value = via ? String(profile.lighting.viaEffect ?? 1) : profile.lighting.effect;
   $("color").value = profile.lighting.color;
   $("brightness").value = profile.lighting.brightness;
   $("speed").value = profile.lighting.speed;
@@ -68,6 +74,7 @@ const updatePaintControls = () => {
 
 const onFormChange = () => {
   readForm();
+  scheduleLive();
   $("brightness-out").textContent = profile.lighting.brightness;
   $("speed-out").textContent = profile.lighting.speed;
   updatePaintControls();
@@ -168,6 +175,7 @@ const setConnected = (on, detail) => {
   status.textContent = t(on ? "status_on" : "status_off");
   status.dataset.i18n = on ? "status_on" : "status_off";
   $("connect").hidden = on;
+  $("connect-other").hidden = on;
   $("disconnect").hidden = !on;
   const name = $("device-name");
   name.hidden = !on;
@@ -182,15 +190,64 @@ const labDeviceText = (detail) => [
     `#${i} usagePage ${hex4(c.usagePage)} usage ${hex4(c.usage)}  in [${c.inputReports}]  out [${c.outputReports}]  feature [${c.featureReports}]`),
 ].join("\n");
 
-const connect = async () => {
+const VIA_FILTER = [{ usagePage: VIA.USAGE_PAGE, usage: VIA.USAGE }];
+
+const connect = async (filters) => {
   try {
-    const device = await session.request();
+    const device = await session.request(filters);
     if (device) { log(`${t("status_on")}: ${device.productName || "?"}`); }
   } catch (error) { log(`${t("applyFailed")}: ${error.message}`); }
 };
 
-session.addEventListener("connected", (event) => setConnected(true, event.detail));
-session.addEventListener("disconnected", () => setConnected(false));
+/* ---------- reading what the keyboard is set to (VIA) ---------- */
+const fillEffectOptions = () => {
+  const options = via ? RGB_EFFECTS.map((effect) => new Option(effect.label, String(effect.id))) : EFFECTS.map((id) => new Option(t(`effect_${id}`), id));
+  $("effect").replaceChildren(...options);
+};
+
+const detectVia = async (detail) => {
+  const hasRaw = detail.collections.some((c) => c.usagePage === VIA.USAGE_PAGE && c.usage === VIA.USAGE);
+  if (!hasRaw) { log(t("viaNoRawHid")); return; }
+  const client = new Via((bytes) => session.transact(bytes));
+  let version;
+  try { version = await client.protocolVersion(); } catch (error) { log(`${t("viaNoAnswer")} (${error.message})`); return; }
+  const layers = await client.layerCount().catch(() => "?");
+  let found = null;
+  for (const [name, channel] of [["rgb_matrix", CHANNEL.RGB_MATRIX], ["rgblight", CHANNEL.RGBLIGHT]]) {
+    try { found = { name, channel, values: await client.getRgb(channel) }; break; } catch (error) { /* try the next channel */ }
+  }
+  const info = $("via-info");
+  info.hidden = false;
+  if (!found) {
+    info.textContent = `VIA v${version} · ${layers} layers · ${t("viaNoRgb")}`;
+    log(t("viaNoRgb"));
+    return;
+  }
+  via = client;
+  viaChannel = found.channel;
+  const { brightness, speed, effect, hue, saturation } = found.values;
+  profile = validateProfile({
+    ...profile,
+    lighting: { ...profile.lighting, effect: previewEffectFor(effect), viaEffect: effect, color: hueSatToHex(hue, saturation),
+      brightness: Math.round((brightness / 255) * 100), speed: Math.round((speed / 255) * 100) },
+  }).profile;
+  fillEffectOptions();
+  writeForm();
+  $("simulation").checked = false;   // a real keyboard answered: send for real
+  info.textContent = `VIA v${version} · ${layers} layers · ${found.name} · effect ${effect} · brightness ${brightness}/255 · speed ${speed}/255 · hue ${hue} sat ${saturation}`;
+  log(`${t("viaReady")}: ${info.textContent}`);
+};
+
+const dropVia = () => {
+  const wasVia = via !== null;
+  via = null;
+  viaChannel = null;
+  $("via-info").hidden = true;
+  if (wasVia) { fillEffectOptions(); profile.lighting.effect = "static"; writeForm(); }
+};
+
+session.addEventListener("connected", (event) => { setConnected(true, event.detail); detectVia(event.detail); });
+session.addEventListener("disconnected", () => { setConnected(false); dropVia(); });
 session.addEventListener("report", (event) => {
   const box = $("lab-log");
   if (box.textContent === "-") { box.textContent = ""; }
@@ -201,11 +258,21 @@ session.addEventListener("report", (event) => {
 /* ---------- apply ---------- */
 const apply = async () => {
   readForm();
-  const driver = $("simulation").checked ? new SimulationDriver() : new Nj81Driver(session);
+  const driver = $("simulation").checked ? new SimulationDriver() : via ? new ViaDriver(via, viaChannel, true) : new Nj81Driver(session);
   try {
     const result = await driver.apply(profile, log);
     log(`${t("applied")} (${driver.name}${result && result.sent === false ? ", nothing sent" : ""})`);
   } catch (error) { log(`${t("applyFailed")}: ${error.message}`); }
+};
+
+/* Changes in the form reach a VIA keyboard right away (not saved in its memory until "Apply"). */
+let liveTimer = null;
+const scheduleLive = () => {
+  if (!via || $("simulation").checked) { return; }
+  clearTimeout(liveTimer);
+  liveTimer = setTimeout(async () => {
+    try { await new ViaDriver(via, viaChannel, false).apply(profile, () => {}); } catch (error) { log(`${t("applyFailed")}: ${error.message}`); }
+  }, 120);
 };
 
 /* ---------- protocol lab ---------- */
@@ -260,8 +327,8 @@ const importJson = async (event) => {
 
 /* ---------- start ---------- */
 const init = () => {
-  $("effect").replaceChildren(...EFFECTS.map((id) => new Option("", id)));
-  const fillEffectNames = () => { for (const option of $("effect").options) { option.textContent = t(`effect_${option.value}`); } };
+  fillEffectOptions();
+  const fillEffectNames = () => { if (!via) { const keep = $("effect").value; fillEffectOptions(); $("effect").value = keep; } };
 
   const applyLanguage = (language) => {
     setLanguage(language);
@@ -282,7 +349,8 @@ const init = () => {
     $("unsupported").hidden = false;
     $("connect").disabled = true;
   }
-  $("connect").addEventListener("click", connect);
+  $("connect").addEventListener("click", () => connect(VIA_FILTER));
+  $("connect-other").addEventListener("click", () => connect([]));
   $("disconnect").addEventListener("click", () => session.close());
   for (const id of ["effect", "color", "brightness", "speed", "screen-w", "screen-h", "profile-name"]) { $(id).addEventListener("input", onFormChange); }
   $("screen-w").min = $("screen-h").min = SCREEN_LIMIT.min;
