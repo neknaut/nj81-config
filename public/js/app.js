@@ -955,6 +955,10 @@ const init = () => {
     button.addEventListener("click", () => { $("color").value = swatch; onFormChange({ target: $("color") }); scheduleLive(); });
     $("swatches").insertBefore(button, $("swatches").querySelector(".custom"));
   }
+  // "Clear log" (Status and Log): empties both views of the log; the keyboard is not touched
+  for (const clear of document.querySelectorAll(".clear-log")) {
+    clear.addEventListener("click", () => { $("log").replaceChildren(); $("mini-log").replaceChildren(); });
+  }
   for (const tab of document.querySelectorAll("[data-tab]")) { tab.addEventListener("click", () => showTab(tab.dataset.tab)); }
   $("mini-clock").addEventListener("click", () => { if (nj) { syncClock(); } });
   $("reactive").addEventListener("change", () => renderEffectList());

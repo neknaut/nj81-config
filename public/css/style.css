@@ -169,3 +169,5 @@ input[type="range"] { accent-color: var(--accent); }
 .thumb { display: grid; gap: 4px; padding: 6px; min-height: 0; font-size: 12px; font-weight: 600; }
 .thumb canvas { width: 100%; aspect-ratio: 2 / 1; image-rendering: pixelated; border-radius: 4px; background: #000; }
 .links { margin: 6px 0 0; padding-left: 18px; font-size: 13px; }
+.panel-head { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
+.small-btn { min-height: 34px; padding: 0 12px; font-size: 13px; background: transparent; }
