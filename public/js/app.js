@@ -414,6 +414,7 @@ const updateScreenControls = () => {
   $("screen-device").hidden = !nj?.display;
   $("screen-connect-note").hidden = Boolean(nj?.display);
   $("screen-send").hidden = !screen;
+  $("screen-slot-box").hidden = !screen || screen.slots < 2;
   $("screen-clear-all").hidden = !(nj?.display && nj.client.family === "yc500");   // the driver's Clear, captured on an NJ81-ED
   $("screen-size-note").hidden = !screen?.assumed;
   $("screen-device-note").hidden = !screen || screen.assumed;

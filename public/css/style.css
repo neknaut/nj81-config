@@ -171,7 +171,11 @@ input[type="text"], select { font: inherit; color: var(--ink); background: var(-
 .screen-right { grid-area: controls; }
 .screen-left, .screen-right { display: flex; flex-direction: column; gap: 10px; min-width: 0; }
 .screen-left .screen { max-width: none; }
-.screen-left #gif-controls { flex-wrap: nowrap; }
+.screen-left #gif-controls { flex-wrap: nowrap; min-width: 0; }
+.screen-left #gif-controls label { min-width: 0; flex: 1 1 auto; }
+.screen-left #gif-controls input[type="range"] { width: 100%; min-width: 0; }
+.screen-left #gif-controls output { flex: none; }
+.screen-left #gif-controls label > span { display: none; }   /* "1/4" next to the slider says it; the slider gets the room */
 #gif-play { white-space: nowrap; flex: none; }
 @media (max-width: 760px) { .screen-layout { grid-template-columns: minmax(0, 1fr); grid-template-areas: "preview" "controls" "gallery"; gap: 14px; } .screen-left { max-width: 280px; } }
 #screen-send { min-width: 13em; }   /* the label turns into "Sending… 37%" without the button changing size */
