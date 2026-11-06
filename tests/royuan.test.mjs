@@ -128,11 +128,13 @@ test("flash writes are spaced at least a second apart, reads are not", async () 
   assert.ok(clock - before < 200, "reads only settle");
 });
 
-test("off is brightness 0, and the menu follows the manufacturer's order", async () => {
+test("off: brightness 0 on gen2, the off switch alone on yc500; the menu follows the manufacturer's order", async () => {
   const { MODES, isOff } = await import("../public/js/royuan.js");
   assert.deepEqual(MODES.map((m) => m.mode), [4, 5, 6, 7, 8, 9, 10, 11, 19, 12, 14, 15, 16, 17, 18, 1, 2, 3]);
   assert.equal(isOff({ mode: 4, brightness: 0 }), true);
   assert.equal(isOff({ mode: 4, brightness: 2 }), false);
+  assert.equal(isOff({ mode: 4, brightness: 0, off: false }), false, "yc500: switched on with Fn + Backspace at brightness 0");
+  assert.equal(isOff({ mode: 4, brightness: 3, off: true }), true);
 });
 
 /* A fake NJ81-ED (device 873, yc500 command set): keymap on 0x89, FF on 0x8A, backlight-off in the options register. */

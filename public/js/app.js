@@ -77,7 +77,8 @@ const readForm = () => {
       ...profile.lighting, color: $("color").value, brightness: $("brightness").value, speed: $("speed").value,
       ...(nj ? (() => {
         const chosen = Number($("effect").value);
-        const off = chosen === OFF || Number($("brightness").value) === 0;
+        // gen2 has no off switch: brightness 0 is off there; on yc500 brightness 0 is a level and off is its own switch
+        const off = chosen === OFF || (nj.client.family === "gen2" && Number($("brightness").value) === 0);
         const nj81 = chosen === OFF
           ? { ...(profile.lighting.nj81 ?? { mode: 1, option: 0, rainbow: false }), off: true }
           : { mode: chosen, option: Number($("light-option").value || 0), rainbow: $("rainbow").checked, off };
@@ -711,7 +712,8 @@ const startWatching = () => {
         const light = await nj.client.readLight();
         if (JSON.stringify(light) !== lastBoardLight && nj) {
           const learned = noteSeen(light);
-          log(`${t("keyboardChanged")}: ${describeNj(light)}`, "kbd", "areaLight");
+          const raw = typeof light.off === "boolean" ? ` (${t("offSwitch")}: ${t(light.off ? "yes" : "no")}, ${t("brightness")} ${light.brightness})` : "";
+          log(`${t("keyboardChanged")}: ${describeNj(light)}${raw}`, "kbd", "areaLight");
           if (learned && learning) { log(`${t("learnedMode")}: ${modeLabel(light.mode)} (${t("modeNumber")} ${light.mode})`, "ok", "areaLight"); }
           showKeyboardLight(light);
         }
@@ -772,7 +774,7 @@ const apply = () => {
 /* One write at a time, the latest settings win: the keyboard takes about one lighting write per second. */
 let njBusy = false;
 let njDirty = false;
-const describeNj = (s) => s.off || s.brightness === 0 ? t("lightsOff")
+const describeNj = (s) => isOff(s) ? t("lightsOff")
   : `${modeLabel(s.mode)}${modeInfo(s.mode)?.options ? ` (${modeInfo(s.mode).options[s.option] ?? s.option})` : ""} · ${s.rainbow ? t("rainbowShort") : s.color} · ${t("brightness")} ${s.brightness}/${brightnessTop} · ${t("speed")} ${s.speed}/${LEVELS}`;
 /* A setting's value in words, for the log and the status table. */
 const FIELD_LABEL = { off: "fieldOff", mode: "effect", brightness: "brightness", speed: "speed", rainbow: "rainbowShort", color: "color", option: "direction" };
