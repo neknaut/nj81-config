@@ -1,12 +1,9 @@
 /* Wires the page together: connection, lighting preview, screen, profiles, log. */
-import { EFFECTS, defaultProfile, parseProfile, serializeProfile, validateProfile } from "./profile.js";
+import { defaultProfile, parseProfile, serializeProfile, validateProfile } from "./profile.js";
 import { KEYS, LAYOUT_HEIGHT, LAYOUT_WIDTH, SCREEN_TILE } from "./layout.js";
-import { keyColor } from "./lighting.js";
 import { HidSession, hex4, hidSupported } from "./hid.js";
-import { Nj81Driver, SimulationDriver, ViaDriver } from "./drivers.js";
-import { CHANNEL, RGB_EFFECTS, VIA, Via, previewEffectFor } from "./via.js";
 import { LEVELS, MODES, OFF, PRESET_COLOURS, ROYUAN, Royuan, isOff, isWritable, modeInfo, pictureBytes } from "./royuan.js";
-import { hexToRgb, hueSatToHex, rgbToHex } from "./util.js";
+import { hexToRgb, rgbToHex } from "./util.js";
 import { GALLERY, LINKS } from "./gallery.js";
 import { REACTIVE_DEFAULT, nj81KeyColor } from "./lighting-nj81.js";
 import { languages, setLanguage, t } from "./i18n.js";
@@ -16,12 +13,9 @@ const STORAGE_KEY = "nj81-config.profiles";
 const FRAME_MS = 50;
 
 let profile = defaultProfile();
-const pressed = new Set();
 const session = new HidSession();
 const keyEls = new Map();
 let screenPixels = null;
-let via = null;          // a Via client once a VIA keyboard answered
-let viaChannel = null;   // which RGB channel of the keyboard we control
 let nj = null;           // { client, model, deviceId, firmware } once a Keydous NJ81 (vendor protocol) answered
 
 /* Speed has 5 steps (0-4). Brightness has 5 on most boards; when the board reports a higher level (changed with its own
@@ -29,7 +23,6 @@ let nj = null;           // { client, model, deviceId, firmware } once a Keydous
 let brightnessTop = LEVELS;
 const toLevel = (percent, top = LEVELS) => Math.round((percent / 100) * top);
 const fromLevel = (value, top = LEVELS) => Math.round((value / top) * 100);
-const PREVIEW_FOR_MODE = { 1: "static", 2: "breathing", 3: "spectrum", 4: "wave", 5: "reactive", 8: "reactive" };
 const njSettings = () => ({
   mode: profile.lighting.nj81?.mode ?? 1,
   option: profile.lighting.nj81?.option ?? 0,
@@ -39,20 +32,17 @@ const njSettings = () => ({
   off: profile.lighting.nj81?.off ?? false,   // the client turns this into brightness 0 (gen2) or the backlight-off bit (yc500)
   color: profile.lighting.color,
 });
-const njPreview = (nj81) => (nj81.off ? "off" : nj81.rainbow ? "spectrum" : PREVIEW_FOR_MODE[nj81.mode] ?? "static");
 let clockOffsetMs = 0;   // standard time minus this computer's clock
 const standardNow = () => new Date(Date.now() + clockOffsetMs);
 
 /* ---------- log ----------
-   Each line says what part it is about and whether it worked: ✅ done and checked on the keyboard, ⚠️ sent but the
-   keyboard reports something else, ❌ failed, ⌨ changed on the keyboard itself, · information. */
-const ICONS = { ok: "✅", warn: "⚠️", error: "❌", kbd: "⌨", info: "·" };
+   Each line says what part it is about; its dot says whether it worked: green done and checked on the keyboard, orange sent
+   but the keyboard reports something else, red failed, blue changed on the keyboard itself, grey information. */
 const log = (message, level = "info", area = "") => {
   const box = $("log");
   const line = document.createElement("div");
   line.className = `log-line log-${level}`;
   line.textContent = `${new Date().toLocaleTimeString()}  ${area ? `${t(area)}: ` : ""}${message}`;
-  line.title = ICONS[level] ?? "";
   box.appendChild(line);
   while (box.childElementCount > 400) { box.firstElementChild.remove(); }
   box.scrollTop = box.scrollHeight;
@@ -91,8 +81,8 @@ const readForm = () => {
         const nj81 = chosen === OFF
           ? { ...(profile.lighting.nj81 ?? { mode: 1, option: 0, rainbow: false }), off: true }
           : { mode: chosen, option: Number($("light-option").value || 0), rainbow: $("rainbow").checked, off };
-        return { nj81, effect: njPreview(nj81) };
-      })() : via ? { viaEffect: Number($("effect").value), effect: previewEffectFor(Number($("effect").value)) } : { effect: $("effect").value }),
+        return { nj81 };
+      })() : {}),
     },
     screen: profile.screen,
   }).profile;
@@ -101,7 +91,7 @@ const readForm = () => {
 
 const writeForm = () => {
   $("profile-name").value = profile.name;
-  $("effect").value = nj ? String(profile.lighting.nj81?.off ? OFF : profile.lighting.nj81?.mode ?? 1) : via ? String(profile.lighting.viaEffect ?? 1) : profile.lighting.effect;
+  if (nj) { $("effect").value = String(profile.lighting.nj81?.off ? OFF : profile.lighting.nj81?.mode ?? 1); }
   refreshOptionControl();
   const option = String(profile.lighting.nj81?.option ?? 0);
   if ([...$("light-option").options].some((o) => o.value === option)) { $("light-option").value = option; }
@@ -110,13 +100,7 @@ const writeForm = () => {
   $("brightness").value = profile.lighting.brightness;
   $("speed").value = profile.lighting.speed;
   renderControls();
-  updatePaintControls();
   drawScreen();
-};
-
-const updatePaintControls = () => {
-  const painting = profile.lighting.effect === "perkey";
-  for (const id of ["paint-help", "fill-all", "clear-all"]) { $(id).hidden = !painting; }
 };
 
 /* ---------- the visible controls (option A): effect list, direction chips, swatches, 0..4 steps ----------
@@ -200,7 +184,6 @@ const onFormChange = (event) => {
   readForm();
   if (nj && profile.lighting.nj81?.off && Number($("effect").value) !== OFF) { $("effect").value = String(OFF); refreshOptionControl(); }
   renderControls();
-  updatePaintControls();
   drawScreen();
 };
 
@@ -252,15 +235,7 @@ const buildKeyboard = () => {
   box.replaceChildren(surface);
 };
 
-const onKeyClick = (key) => {
-  if (profile.lighting.effect === "perkey") {
-    profile.lighting.perKey[key.id] = $("color").value.toLowerCase();
-  } else {
-    pressed.add(key.id);
-    setTimeout(() => pressed.delete(key.id), 450);
-    notePress(key);
-  }
-};
+const onKeyClick = (key) => notePress(key);   // a click counts as a key press for the effects that react to typing
 
 /* Recent key presses (real keyboard or clicks), for the effects that react to typing. */
 const presses = [];
@@ -269,7 +244,7 @@ const notePress = (key) => {
   while (presses.length && performance.now() - presses[0].t > 2500) { presses.shift(); }
 };
 
-/* With an NJ81 the drawing plays that board's own effect; otherwise the generic preview. */
+/* The drawing plays the connected NJ81's own effect (dark when nothing is connected). */
 const nj81Preview = () => {
   const l = profile.lighting;
   if (!nj || !l.nj81) { return null; }
@@ -280,7 +255,7 @@ const paintKeyboard = (time) => {
   const nj81 = nj81Preview();
   const reactive = nj81 ? reactiveModes() : null;
   for (const key of KEYS) {
-    const [red, green, blue] = nj81 ? nj81KeyColor(nj81, key, time, presses, reactive) : keyColor(profile, key, time, pressed);
+    const [red, green, blue] = nj81 ? nj81KeyColor(nj81, key, time, presses, reactive) : [0, 0, 0];
     const el = keyEls.get(key.id);
     el.style.setProperty("--led", rgbToHex(red, green, blue));   // the CSS of the chosen keycap colour decides how it shows
   }
@@ -428,7 +403,7 @@ const updateScreenControls = () => {
 };
 
 const sendPicture = async () => {
-  if (!nj?.model?.screen || $("simulation").checked) { logWarn("areaScreen", t("screenNeedsKeyboard")); return; }
+  if (!nj?.model?.screen) { logWarn("areaScreen", t("screenNeedsKeyboard")); return; }
   const { width, height } = nj.model.screen;
   readForm();
   profile.screen.width = width;
@@ -458,7 +433,7 @@ const showKey = (code, down) => {
   for (const key of KEYS) {
     if (key.code !== code) { continue; }
     keyEls.get(key.id)?.classList.toggle("down", down);
-    if (down) { pressed.add(key.id); setTimeout(() => pressed.delete(key.id), 450); notePress(key); }
+    if (down) { notePress(key); }
   }
 };
 
@@ -523,11 +498,10 @@ const setConnected = (on, detail) => {
   }
 };
 
-/* Any Keydous vendor id (every interface), any vendor collection, and VIA keyboards. */
+/* Any Keydous vendor id (every interface) and any vendor collection. */
 const DEVICE_FILTERS = [
   ...ROYUAN.VENDOR_IDS.map((vendorId) => ({ vendorId })),
   { usagePage: ROYUAN.USAGE_PAGE },
-  { usagePage: VIA.USAGE_PAGE, usage: VIA.USAGE },
 ];
 
 /* After "Disconnect" the page stays disconnected, also after a reload, until "Connect" is pressed again. */
@@ -543,7 +517,6 @@ const connect = async (filters) => {
   } catch (error) { logError("areaConn", `${t("applyFailed")}: ${error.message}`); }
 };
 
-/* ---------- reading what the keyboard is set to (VIA) ---------- */
 /* Effects this keyboard does not run (it did not keep them, or the user hid them), remembered per keyboard model. */
 const modesKey = () => `nj81-config.hidden-modes.${nj?.deviceId ?? "none"}`;
 /* What this keyboard model really has, learned by watching it while the user cycles effects with its own keys:
@@ -595,43 +568,9 @@ const hideMode = (mode) => {
 };
 
 const fillEffectOptions = () => {
-  const options = nj ? [new Option(t("lightsOff"), String(OFF)), ...modeChoices().map((mode) => new Option(modeLabel(mode), String(mode)))] : via ? RGB_EFFECTS.map((effect) => new Option(effect.label, String(effect.id))) : EFFECTS.map((id) => new Option(t(`effect_${id}`), id));
+  const options = nj ? [new Option(t("lightsOff"), String(OFF)), ...modeChoices().map((mode) => new Option(modeLabel(mode), String(mode)))] : [];
   $("effect").replaceChildren(...options);
   renderEffectList();
-};
-
-const detectVia = async (detail) => {
-  const hasRaw = detail.collections.some((c) => c.usagePage === VIA.USAGE_PAGE && c.usage === VIA.USAGE);
-  if (!hasRaw) { log(t("viaNoRawHid")); return; }
-  const client = new Via((bytes) => session.transact(bytes));
-  let version;
-  try { version = await client.protocolVersion(); } catch (error) { log(`${t("viaNoAnswer")} (${error.message})`); return; }
-  const layers = await client.layerCount().catch(() => "?");
-  let found = null;
-  for (const [name, channel] of [["rgb_matrix", CHANNEL.RGB_MATRIX], ["rgblight", CHANNEL.RGBLIGHT]]) {
-    try { found = { name, channel, values: await client.getRgb(channel) }; break; } catch (error) { /* try the next channel */ }
-  }
-  const info = $("via-info");
-  info.hidden = false;
-  if (!found) {
-    info.textContent = `VIA v${version} · ${layers} layers · ${t("viaNoRgb")}`;
-    log(t("viaNoRgb"));
-    return;
-  }
-  via = client;
-  setControlsEnabled(true);
-  viaChannel = found.channel;
-  const { brightness, speed, effect, hue, saturation } = found.values;
-  profile = validateProfile({
-    ...profile,
-    lighting: { ...profile.lighting, effect: previewEffectFor(effect), viaEffect: effect, color: hueSatToHex(hue, saturation),
-      brightness: Math.round((brightness / 255) * 100), speed: Math.round((speed / 255) * 100) },
-  }).profile;
-  fillEffectOptions();
-  writeForm();
-  $("simulation").checked = false;   // a real keyboard answered: send for real
-  info.textContent = `VIA v${version} · ${layers} layers · ${found.name} · effect ${effect} · brightness ${brightness}/255 · speed ${speed}/255 · hue ${hue} sat ${saturation}`;
-  log(`${t("viaReady")}: ${info.textContent}`);
 };
 
 /* Keydous NJ81 (vendor protocol): identify the model, then read its current lighting into the form. */
@@ -639,12 +578,13 @@ const detectNj81 = async () => {
   const client = new Royuan(session.featureTransport());
   let id;
   try { id = await client.identify(); } catch (error) { logError("areaConn", `${t("njNoAnswer")} (${error.message})`); return false; }
-  const info = $("via-info");
+  const info = $("device-info");
   info.hidden = false;
   info.textContent = `${id.model.name} · id ${id.deviceId} · firmware ${id.firmware}`;
   let model = id.model;
   if (!isWritable(model)) {   // older boards: ask which command set they speak (reads only)
-    const family = await client.probeFamily().catch(() => null);
+    const knownFamily = (() => { try { return JSON.parse(localStorage.getItem(`nj81-config.board.${id.deviceId}`) || "{}").family; } catch (error) { return null; } })();
+    const family = knownFamily || await client.probeFamily().catch(() => null);   // asked once, then remembered for this model
     if (!family) { logWarn("areaConn", `${t("njUnsupported")}: ${info.textContent}`); return true; }
     client.family = family;
     model = { ...model, family, screen: model.screen ?? null };
@@ -663,13 +603,15 @@ const detectNj81 = async () => {
       screen: model.screen ? { ...profile.screen, width: model.screen.width, height: model.screen.height } : profile.screen,
     }).profile;
     showKeyboardLight(light);
-    $("simulation").checked = false;   // the keyboard answered: changes go to it for real
     info.textContent += ` · profile ${active === null ? "?" : active + 1}`;
     logOk("areaConn", `${t("viaReady")}: ${info.textContent}`);
     logOk("areaLight", `${t("lightNow")}: ${describeNj(light)}`);
   } catch (error) { logError("areaLight", `${t("applyFailed")}: ${error.message}`); }
+  if (nj.client.family !== "gen2") { const known = board(); if (known.family !== nj.client.family) { known.family = nj.client.family; saveBoard(known); } }
   startWatching();
-  if (display) { await syncClock(); }   // like the official driver: set the screen's clock on every connect
+  // like the official driver, the clock is set on every connect, but a little later: it is a flash write too, and the
+  // lighting must not wait a second behind it right after connecting
+  if (display) { scheduleClock(3000); }
   updateScreenControls();
   return true;
 };
@@ -685,6 +627,16 @@ const measureClock = async () => {
   } catch (error) { /* offline: keep this computer's clock */ }
   clockOffsetMs = 0;
   return false;
+};
+
+let clockTimer = null;
+const scheduleClock = (delayMs) => {
+  clearTimeout(clockTimer);
+  clockTimer = setTimeout(() => {
+    if (!nj) { return; }
+    if (njBusy || njDirty || Date.now() - lastLocalChange < 2000) { scheduleClock(1500); return; }   // lighting first
+    syncClock();
+  }, delayMs);
 };
 
 const syncClock = async () => {
@@ -705,8 +657,7 @@ const showKeyboardLight = (light) => {
   profile = validateProfile({
     ...profile,
     lighting: { ...profile.lighting, color: light.color, brightness: fromLevel(light.brightness, brightnessTop), speed: fromLevel(light.speed),
-      nj81: { mode: light.mode || profile.lighting.nj81?.mode || 1, option: light.option, rainbow: light.rainbow, off: isOff(light) },
-      effect: njPreview({ ...light, off: isOff(light) }) },
+      nj81: { mode: light.mode || profile.lighting.nj81?.mode || 1, option: light.option, rainbow: light.rainbow, off: isOff(light) } },
   }).profile;
   fillEffectOptions();
   writeForm();
@@ -757,39 +708,32 @@ const setLearning = (on) => {
   }
 };
 
-const dropVia = () => {
-  const wasVia = via !== null || nj !== null;
-  via = null;
+const dropKeyboard = () => {
+  const had = nj !== null;
   nj = null;
   clearTimeout(watchTimer);
+  clearTimeout(clockTimer);
   if (learning) { learning = false; $("learn-box").hidden = true; $("learn-start").hidden = false; }
   updateScreenControls();
-  viaChannel = null;
-  $("via-info").hidden = true;
-  if (wasVia) { fillEffectOptions(); profile.lighting.effect = "static"; writeForm(); }
+  $("device-info").hidden = true;
+  if (had) { fillEffectOptions(); writeForm(); }
 };
 
 session.addEventListener("connected", async (event) => {
   setConnected(true, event.detail);
   const vendor = event.detail.collections.some((c) => c.usagePage === ROYUAN.USAGE_PAGE && ROYUAN.USAGES.includes(c.usage));
-  if (vendor && await detectNj81()) { return; }
-  await detectVia(event.detail);
+  if (!vendor) { logWarn("areaConn", t("njNoInterface")); return; }
+  await detectNj81();
 });
-session.addEventListener("disconnected", () => { setConnected(false); dropVia(); });
+session.addEventListener("disconnected", () => { setConnected(false); dropKeyboard(); });
 
 /* ---------- apply ---------- */
-const apply = async () => {
+/* "Apply" (profile card): sends the whole profile's lighting to the keyboard. */
+const apply = () => {
   readForm();
-  if (nj && !$("simulation").checked) { pushNj81(); return; }
-  const driver = $("simulation").checked ? new SimulationDriver() : via ? new ViaDriver(via, viaChannel, true) : new Nj81Driver(session);
-  try {
-    const result = await driver.apply(profile, log);
-    logOk("areaLight", `${t("applied")} (${driver.name}${result && result.sent === false ? ", nothing sent" : ""})`);
-  } catch (error) { logError("areaLight", `${t("applyFailed")}: ${error.message}`); }
+  if (nj) { pushNj81(); }
 };
 
-/* Changes in the form reach a VIA keyboard right away (not saved in its memory until "Apply"). */
-let liveTimer = null;
 /* One write at a time, the latest settings win: the keyboard takes about one lighting write per second. */
 let njBusy = false;
 let njDirty = false;
@@ -866,12 +810,7 @@ const pushNj81 = async () => {
 
 const scheduleLive = () => {
   lastLocalChange = Date.now();
-  if (nj && !$("simulation").checked) { pushNj81(); return; }
-  if (!via || $("simulation").checked) { return; }
-  clearTimeout(liveTimer);
-  liveTimer = setTimeout(async () => {
-    try { await new ViaDriver(via, viaChannel, false).apply(profile, () => {}); } catch (error) { log(`${t("applyFailed")}: ${error.message}`); }
-  }, 120);
+  if (nj) { pushNj81(); }
 };
 
 /* ---------- profiles ---------- */
@@ -904,7 +843,7 @@ const importJson = async (event) => {
 /* ---------- start ---------- */
 const init = () => {
   fillEffectOptions();
-  const fillEffectNames = () => { if (!via) { const keep = $("effect").value; fillEffectOptions(); $("effect").value = keep; } };
+  const fillEffectNames = () => { const keep = $("effect").value; fillEffectOptions(); $("effect").value = keep; };   // "Lights off" is translated
 
   const applyLanguage = (language) => {
     setLanguage(language);
@@ -983,8 +922,6 @@ const init = () => {
   $("mini-clock").addEventListener("click", () => { if (nj) { syncClock(); } });
   $("reactive").addEventListener("change", () => renderEffectList());
   $("show-modes").addEventListener("click", () => { setHiddenModes(new Set()); const known = board(); known.done = false; saveBoard(known); const keep = $("effect").value; fillEffectOptions(); $("effect").value = keep; refreshOptionControl(); });  $("screen-file").addEventListener("change", onScreenFile);
-  $("fill-all").addEventListener("click", () => { for (const key of KEYS) { profile.lighting.perKey[key.id] = $("color").value.toLowerCase(); } });
-  $("clear-all").addEventListener("click", () => { profile.lighting.perKey = {}; });
   $("save-local").addEventListener("click", saveLocal);
   $("load-local").addEventListener("click", loadLocal);
   $("export-json").addEventListener("click", () => { readForm(); download(`${profile.name || "profile"}.nj81.json`, serializeProfile(profile), "application/json"); });
