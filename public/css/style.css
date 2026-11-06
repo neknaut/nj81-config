@@ -116,3 +116,9 @@ progress { width: 100%; margin-top: 10px; }
 .status { border-collapse: collapse; margin-top: 10px; min-width: 320px; }
 .status th, .status td { border-bottom: 1px solid var(--soft); padding: 3px 10px 3px 0; text-align: left; }
 .status td.bad { font-weight: 700; }
+.connect-first { display: none; margin: -4px 0 10px; color: var(--muted); font-weight: 600; }
+.needs-keyboard.disconnected .connect-first { display: block; }
+.needs-keyboard.disconnected :is(input, select, textarea, button):disabled { opacity: 0.45; cursor: not-allowed; }
+.needs-keyboard.disconnected .screen { opacity: 0.6; }
+.needs-keyboard.disconnected .keyboard { opacity: 0.8; }
+.file-button.disabled { opacity: 0.5; cursor: not-allowed; pointer-events: none; }

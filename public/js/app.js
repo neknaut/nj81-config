@@ -421,7 +421,23 @@ const download = (name, data, type) => {
 
 
 /* ---------- connection ---------- */
+/* Lighting, screen and profile controls only work with a keyboard that answered: until then they are disabled
+   (the keycap colour of the drawing stays free). Disabling remembers which controls were disabled for other reasons. */
+const KEEP_ENABLED = new Set(["caps"]);
+const setControlsEnabled = (on) => {
+  for (const card of document.querySelectorAll(".needs-keyboard")) {
+    card.classList.toggle("disconnected", !on);
+    card.querySelectorAll("input, select, button, textarea").forEach((el) => {
+      if (KEEP_ENABLED.has(el.id)) { return; }
+      if (!on) { if (!el.disabled) { el.dataset.offline = "1"; el.disabled = true; } }
+      else if (el.dataset.offline) { delete el.dataset.offline; el.disabled = false; }
+    });
+    card.querySelectorAll(".file-button").forEach((el) => el.classList.toggle("disabled", !on));
+  }
+};
+
 const setConnected = (on, detail) => {
+  if (!on) { setControlsEnabled(false); }
   const status = $("status");
   status.className = `chip ${on ? "on" : "off"}`;
   status.textContent = t(on ? "status_on" : "status_off");
@@ -533,6 +549,7 @@ const detectVia = async (detail) => {
     return;
   }
   via = client;
+  setControlsEnabled(true);
   viaChannel = found.channel;
   const { brightness, speed, effect, hue, saturation } = found.values;
   profile = validateProfile({
@@ -566,6 +583,7 @@ const detectNj81 = async () => {
   }
   const display = Boolean(model.screen) || await client.hasDisplay().catch(() => false);
   nj = { client, ...id, model, display };
+  setControlsEnabled(true);
   try {
     const [light, active] = [await client.readLight(), await client.profile().catch(() => null)];
     profile = validateProfile({
@@ -897,6 +915,7 @@ const init = () => {
   $("apply").addEventListener("click", apply);
 
   buildKeyboard();
+  queueMicrotask(() => setControlsEnabled(false));   // after the gallery and swatches exist
   applyCaps((() => { try { return localStorage.getItem(CAPS_KEY); } catch (error) { return null; } })() === "black" ? "black" : "white");
   $("caps").addEventListener("change", (event) => { applyCaps(event.target.value); event.target.blur(); });
   updateScreenControls();
