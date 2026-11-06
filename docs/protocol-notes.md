@@ -61,3 +61,11 @@ then 100 ms; then the pages of every frame, `[25, frame, frames, delay, page lo,
 delay is the average of the GIF's frame delays in ms (at most 255), the same in every packet. The pixels are cut to the box around
 every non-black pixel of all frames (right / bottom exclusive), column by column, RGB565 high byte first. Up to 50 frames in the
 driver's load path (250 in its editor). `Royuan.uploadScreen()` does exactly this.
+
+**NJ81-ED music lighting, read from the official driver and checked on the keyboard (2026-11-07). Not in the app: a web page cannot hear the computer's sound without a share prompt each time, so the two music modes were left out.** modes 20 ("Music Follow") and
+22 ("Music Follow 2"), options upright / separate / intersect (0-2) in byte 4's high nibble, byte 4's low nibble 0 = rainbow and
+4 = the RGB in bytes 5-7, byte 2 fixed at 4 (MAXSPEED, no speed). While a music mode is on the page streams the spectrum every
+30 ms: `[0D 00 00 00 00 00 00 F2, 32 values 0-6, 0...]` with the usual checksum at byte 7 (the driver's `writeRawFeatureCmd(p, 0)`:
+its CheckSumType is `{ BIT7: 0, BIT8: 1, NONE: 2 }`; without the checksum the keyboard ignores the frames). The 32 values are the
+driver's `music3Delt`: an AnalyserNode (fftSize 2048, smoothing 0.4), the first 100 byte-frequency bins less the quietest of bins
+20-39, scaled so the loudest is 6, bins 27-58.

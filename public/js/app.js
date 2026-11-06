@@ -1004,6 +1004,7 @@ const pushNj81 = async () => {
     const settings = njSettings();
     const key = JSON.stringify(settings);
     if (key === lastDoneKey) { continue; }   // the same as what the keyboard already confirmed (a click fires input and change)
+    lastDoneKey = "";   // something else goes out now: the keyboard no longer shows what was confirmed before
     const asked = Date.now();
     // newer settings are waiting: do not hold them up checking these. The same settings again are not newer.
     const superseded = () => {
