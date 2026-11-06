@@ -9,7 +9,7 @@ export const defaultProfile = () => ({
   schema: SCHEMA_VERSION,
   name: "My profile",
   lighting: { effect: "static", color: "#ff7a66", brightness: 80, speed: 50, perKey: {} },
-  screen: { width: 128, height: 64, name: "" },   // the real size of the NJ81's display is still to be confirmed
+  screen: { width: 160, height: 80, name: "" },   // the NJ81's screen is 160x80
 });
 
 const asNumber = (value, fallback) => (Number.isFinite(Number(value)) ? Number(value) : fallback);
