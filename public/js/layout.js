@@ -17,7 +17,7 @@ const GAP = 0.25;   // between the function row and the rest
 
 const ROWS = [
   row(0, [["Esc"], ...fKeys]),
-  row(1 + GAP, [["`"], ...letters("1234567890-="), ["Bksp", 2], ["Del"]]),
+  row(1 + GAP, [["`"], ...letters("1234567890-="), ["Backspace", 2], ["Del"]]),
   row(2 + GAP, [["Tab", 1.5], ...letters("QWERTYUIOP[]"), ["\\", 1.5], ["PgUp"]]),
   row(3 + GAP, [["Caps", 1.75], ...letters("ASDFGHJKL;'"), ["Enter", 2.25], ["PgDn"]]),
   row(4 + GAP, [["Shift", 2.25], ...letters("ZXCVBNM,./"), ["Shift", 1.75], ["Up"], ["End"]]),
@@ -29,7 +29,7 @@ export const SCREEN_TILE = { x: 14.5, y: 0, w: 1.5, h: 1 };
 
 /* KeyboardEvent.code of each key, so presses on the real keyboard show on the drawing. Keys that exist twice are left/right. */
 const SPECIAL_CODES = {
-  Esc: "Escape", Del: "Delete", "`": "Backquote", "-": "Minus", "=": "Equal", Bksp: "Backspace", Home: "Home", Tab: "Tab",
+  Esc: "Escape", Del: "Delete", "`": "Backquote", "-": "Minus", "=": "Equal", Backspace: "Backspace", Home: "Home", Tab: "Tab",
   "[": "BracketLeft", "]": "BracketRight", "\\": "Backslash", PgUp: "PageUp", Caps: "CapsLock", ";": "Semicolon", "'": "Quote",
   Enter: "Enter", PgDn: "PageDown", ",": "Comma", ".": "Period", "/": "Slash", Up: "ArrowUp", End: "End", Win: "MetaLeft",
   Space: "Space", Left: "ArrowLeft", Down: "ArrowDown", Right: "ArrowRight",

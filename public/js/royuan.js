@@ -260,23 +260,29 @@ export class Royuan {
   }
 
   /* Writes the lighting and reads it back; `kept` says whether the keyboard reports exactly what was sent. */
-  /* `settings.off`: gen2 turns the lights off as the effect at brightness 0, yc500 with its options bit. */
+  /* `settings.off`: gen2 turns the lights off as the effect at brightness 0, yc500 with its options bit.
+     The keyboard can answer the first read after a write with its previous state, so the result is read up to three times
+     before a difference is believed. Returns { light, diffs } (diffs empty: the keyboard took everything). */
   async writeLight(settings) {
     const yc500 = Boolean(FAMILIES[this.family].options);
     if (yc500 && settings.off) {   // both ways: brightness 0 and the backlight-off bit, so the lights go out whichever the firmware honours
       await this.#serial(() => this.#write(encodeLight({ ...settings, brightness: 0 }, this.family)));
       await this.sleep(150);
       await this.#setLedOff(true);
-      const light = await this.readLight();
-      return { kept: light.off === true, light };
+    } else {
+      await this.#serial(() => this.#write(encodeLight(yc500 || !settings.off ? settings : { ...settings, brightness: 0 }, this.family)));
+      await this.sleep(150);
+      if (yc500) { await this.#setLedOff(false); }
     }
-    const data = encodeLight(yc500 || !settings.off ? settings : { ...settings, brightness: 0 }, this.family);
-    await this.#serial(() => this.#write(data));
-    await this.sleep(150);
-    if (yc500) { await this.#setLedOff(false); }
-    const reply = await this.get(OP.GET_LIGHT);
-    const light = await this.readLight();
-    return { kept: data.subarray(1, 8).every((v, i) => v === reply[1 + i]) && (!yc500 || !light.off), light };
+    let light;
+    let diffs = [];
+    for (let read = 0; read < 3; read += 1) {
+      if (read) { await this.sleep(250); }
+      light = await this.readLight();
+      diffs = lightDifferences(settings, light);
+      if (!diffs.length) { break; }
+    }
+    return { light, diffs };
   }
 
   /* `date` can be a function: it is then read at the moment the packet goes out, after any wait. */
@@ -306,3 +312,21 @@ export class Royuan {
 
 /* "Off" is shown when the keyboard reports brightness 0 (or effect 0). */
 export const isOff = (light) => light.off === true || light.brightness === 0 || light.mode === OFF;
+
+/* Which settings the keyboard did not keep: [{ field, sent, got }]. Fields an effect does not have are not compared. */
+export const lightDifferences = (sent, got) => {
+  const out = [];
+  const add = (field, a, b) => { if (a !== b) { out.push({ field, sent: a, got: b }); } };
+  add("off", Boolean(sent.off), isOff(got));
+  if (sent.off || isOff(got)) { return out; }
+  const info = modeInfo(sent.mode);
+  add("mode", sent.mode, got.mode);
+  add("brightness", sent.brightness, got.brightness);
+  if (!info?.noSpeed) { add("speed", sent.speed, got.speed); }
+  if (!info?.noColor) {
+    add("rainbow", Boolean(sent.rainbow), Boolean(got.rainbow));
+    if (!sent.rainbow && !got.rainbow) { add("color", sent.color.toLowerCase(), got.color.toLowerCase()); }
+  }
+  if (info?.options) { add("option", sent.option ?? 0, got.option); }
+  return out;
+};
