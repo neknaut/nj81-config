@@ -235,3 +235,21 @@ test("the drawing has a valid colour for every NJ81 effect, reactive ones dark u
   }
   assert.deepEqual(nj81KeyColor({ mode: 1, off: true }, KEYS[0], 0), [0, 0, 0]);
 });
+
+test("radiant runs along the pressed key's row to both sides; key shadow lights only that key", async () => {
+  const { nj81KeyColor } = await import("../public/js/lighting-nj81.js");
+  const { KEYS } = await import("../public/js/layout.js");
+  const g = KEYS.find((k) => k.label === "G");
+  const press = [{ x: g.x + g.w / 2, y: g.y + 0.5, t: 0 }];
+  const base = { option: 0, rainbow: false, color: [255, 255, 255], level: 1, speed: 0.5, off: false };
+  const litAt = (mode, time) => KEYS.filter((k) => nj81KeyColor({ ...base, mode }, k, time, press).some((v) => v > 30));
+  const radiant = litAt(14, 400);
+  assert.ok(radiant.length >= 2 && radiant.every((k) => k.y === g.y), "radiant stays on the row");
+  assert.ok(radiant.some((k) => k.x < g.x) && radiant.some((k) => k.x > g.x), "radiant goes both ways");
+  assert.deepEqual(litAt(8, 100).map((k) => k.label), ["G"]);
+});
+
+test("the NJ81-ED lists only the effects seen on it", async () => {
+  const { modelFor } = await import("../public/js/royuan.js");
+  assert.deepEqual(modelFor(873).modes, [4, 5, 6, 8, 9, 10, 11, 19, 12, 14, 16, 17, 18, 2, 3]);
+});

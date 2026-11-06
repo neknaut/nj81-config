@@ -18,7 +18,7 @@ export const MODELS = {
   4207: { name: "NJ81-MAX CP", family: "gen2", profiles: 4, screen: SCREEN },
   // Older NJ81s: the vendor table does not say which command set they use, so the app asks the board (probeFamily).
   // Their firmware names say yc500; the NJ81-ED's ("v504_oledv504") has a display, size not on file.
-  732: { name: "NJ81", family: "unknown" }, 819: { name: "NJ81S", family: "unknown" }, 873: { name: "NJ81-ED", family: "unknown" },
+  732: { name: "NJ81", family: "unknown" }, 819: { name: "NJ81S", family: "unknown" }, 873: { name: "NJ81-ED", family: "unknown", modes: [4, 5, 6, 8, 9, 10, 11, 19, 12, 14, 16, 17, 18, 2, 3] },   // as seen on a real NJ81-ED
   1475: { name: "NJ81-CP (older)", family: "unknown" }, 1493: { name: "NJ81", family: "unknown" },
 };
 export const modelFor = (deviceId) => MODELS[deviceId] ?? { name: `Unknown keyboard (id ${deviceId})`, family: "unknown" };

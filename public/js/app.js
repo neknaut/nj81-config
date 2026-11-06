@@ -445,9 +445,15 @@ const DEVICE_FILTERS = [
   { usagePage: VIA.USAGE_PAGE, usage: VIA.USAGE },
 ];
 
+/* After "Disconnect" the page stays disconnected, also after a reload, until "Connect" is pressed again. */
+const AUTO_KEY = "nj81-config.autoconnect";
+const setAutoConnect = (on) => { try { localStorage.setItem(AUTO_KEY, on ? "on" : "off"); } catch (error) { /* private mode */ } };
+const autoConnect = () => { try { return localStorage.getItem(AUTO_KEY) !== "off"; } catch (error) { return true; } };
+
 const connect = async (filters) => {
   try {
     const device = await session.request(filters);
+    if (device) { setAutoConnect(true); }
     if (!device) { logWarn("areaConn", t("noDevicePicked")); }
   } catch (error) { logError("areaConn", `${t("applyFailed")}: ${error.message}`); }
 };
@@ -463,7 +469,9 @@ const saveBoard = (value) => { try { localStorage.setItem(boardKey(), JSON.strin
 const modeLabel = (mode) => board().names[mode] || modeInfo(mode)?.name || `${t("modeNumber")} ${mode}`;
 const modeChoices = () => {
   const known = board();
-  const list = known.done && known.seen.length ? known.seen : MODES.map((m) => m.mode).filter((m) => !hiddenModes().has(m));
+  // learned on this keyboard > the model's list on file > the full NJ81 table
+  const list = known.done && known.seen.length ? known.seen
+    : (nj?.model?.modes ?? MODES.map((m) => m.mode)).filter((m) => !hiddenModes().has(m));
   const current = profile.lighting.nj81?.mode;
   return current && !list.includes(current) ? [...list, current] : list;
 };
@@ -829,7 +837,7 @@ const init = () => {
   }
   $("connect").addEventListener("click", () => connect(DEVICE_FILTERS));
   $("connect-other").addEventListener("click", () => connect([]));
-  $("disconnect").addEventListener("click", () => session.close());
+  $("disconnect").addEventListener("click", () => { setAutoConnect(false); session.close(); log(t("disconnectedByUser"), "info", "areaConn"); });
   for (const id of ["effect", "color", "brightness", "speed", "profile-name", "light-option", "rainbow"]) { $(id).addEventListener("input", onFormChange); }
   // the keyboard gets a setting once it is chosen (slider released, colour picked), not on every step of a drag
   for (const id of ["color", "brightness", "speed"]) { $(id).addEventListener("input", () => scheduleLive()); }
@@ -897,7 +905,8 @@ const init = () => {
   setConnected(false);
   log(hidSupported() ? "WebHID ok" : "WebHID not available");
   if (hidSupported()) {
-    session.reconnect().catch(() => {});   // a keyboard this site was already allowed to use connects by itself
+    // a keyboard this site was already allowed to use connects by itself, unless the user pressed "Disconnect"
+    if (autoConnect()) { session.reconnect().catch(() => {}); }
     navigator.hid.addEventListener("disconnect", (event) => { if (event.device === session.device) { session.close(); } });
   }
   requestAnimationFrame(frame);
