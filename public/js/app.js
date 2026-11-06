@@ -463,7 +463,9 @@ const saveBoard = (value) => { try { localStorage.setItem(boardKey(), JSON.strin
 const modeLabel = (mode) => board().names[mode] || modeInfo(mode)?.name || `${t("modeNumber")} ${mode}`;
 const modeChoices = () => {
   const known = board();
-  const list = known.done && known.seen.length ? known.seen : MODES.map((m) => m.mode).filter((m) => !hiddenModes().has(m));
+  // learned on this keyboard > the model's list on file > the full NJ81 table
+  const list = known.done && known.seen.length ? known.seen
+    : (nj?.model?.modes ?? MODES.map((m) => m.mode)).filter((m) => !hiddenModes().has(m));
   const current = profile.lighting.nj81?.mode;
   return current && !list.includes(current) ? [...list, current] : list;
 };
