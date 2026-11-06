@@ -43,6 +43,10 @@
           <span data-i18n="effect"></span>
           <select id="effect"></select>
         </label>
+        <label id="light-option-box" hidden>
+          <span data-i18n="direction"></span>
+          <select id="light-option"></select>
+        </label>
         <label>
           <span data-i18n="color"></span>
           <input id="color" type="color" value="#ff7a66">
@@ -56,6 +60,8 @@
           <input id="speed" type="range" min="0" max="100" value="50">
         </label>
       </div>
+      <label id="rainbow-box" class="check" hidden><input id="rainbow" type="checkbox"> <span data-i18n="rainbow"></span></label>
+      <p class="muted small" data-i18n="typeHint"></p>
       <div id="keyboard" class="keyboard" role="group" aria-label="Keyboard preview"></div>
       <div class="row">
         <p id="paint-help" class="muted small" data-i18n="paintHelp" hidden></p>
@@ -83,6 +89,15 @@
       </div>
       <canvas id="screen-canvas" class="screen" width="128" height="64"></canvas>
       <div class="row"><button id="screen-export" type="button" data-i18n="exportRgb565"></button></div>
+      <div id="screen-device" hidden>
+        <div class="row">
+          <label class="inline"><span data-i18n="screenSlot"></span> <select id="screen-slot"></select></label>
+          <button id="screen-send" type="button" class="primary" data-i18n="screenSend"></button>
+          <button id="screen-clock" type="button" data-i18n="screenClock"></button>
+        </div>
+        <progress id="screen-progress" hidden value="0" max="1"></progress>
+        <p class="muted small" data-i18n="screenDeviceNote"></p>
+      </div>
       <p class="muted small" data-i18n="screenNote"></p>
     </section>
 

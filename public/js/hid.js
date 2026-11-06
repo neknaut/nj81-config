@@ -69,6 +69,23 @@ export class HidSession extends EventTarget {
     });
   }
 
+  /* Feature-report transport for the vendor protocol (64 bytes, report ID 0). Some platforms put the report ID in front of
+     the data they return: that byte is dropped so the caller always gets the 64 payload bytes. */
+  featureTransport(size = 64) {
+    return {
+      setFeature: async (bytes) => {
+        if (!this.device) { throw new Error("No keyboard connected"); }
+        await this.device.sendFeatureReport(0, bytes);
+      },
+      getFeature: async () => {
+        if (!this.device) { throw new Error("No keyboard connected"); }
+        const view = await this.device.receiveFeatureReport(0);
+        const data = new Uint8Array(view.buffer, view.byteOffset, view.byteLength);
+        return Uint8Array.from(data.length > size ? data.subarray(data.length - size) : data);
+      },
+    };
+  }
+
   async readFeature(reportId) {
     if (!this.device) { throw new Error("No keyboard connected"); }
     const view = await this.device.receiveFeatureReport(reportId);

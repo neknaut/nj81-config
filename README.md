@@ -8,11 +8,15 @@ A web app to edit the **RGB lighting and the screen** of the Keydous NJ81 keyboa
 ![Status](https://img.shields.io/badge/status-protocol%20unknown-orange)
 
 > [!IMPORTANT]
-> **VIA support (new).** If the NJ81's firmware speaks the open VIA/QMK protocol, *Connect* reads its current lighting (effect,
-> colour, brightness, speed), the effect dropdown lists the firmware's effects and every change is sent live; *Apply* also saves it
-> in the keyboard's memory. This is tested only against a simulated VIA keyboard, **not yet against a real NJ81**: if the keyboard
-> does not answer, the app says so and falls back to the simulation. The screen and any vendor-only features still need the
-> official driver's protocol ([how to capture it](docs/capturing-usb.md)).
+> **Supported keyboards.** The NJ81 does not run VIA: it speaks Keydous's own vendor protocol ("ROYUAN gen2", the one the official
+> driver uses). The app now speaks it for the **NJ81-CP, NJ81-CP V3, NJ81-MAX and NJ81-MAX CP**: on *Connect* it identifies the model,
+> **reads the current lighting** (effect, direction, colour or rainbow, brightness, speed, profile) and every change in the page is
+> written to the keyboard and read back. The 160×80 screen takes still pictures in its 5 slots and the clock can be synced.
+> Older NJ81 boards (yc500 generation) are recognised but read-only. Tested against a simulated keyboard only, not yet on real
+> hardware. Use the **USB cable** and close the official driver first (only one program can talk to the keyboard).
+>
+> Limits: the keyboard cannot report which picture its screen shows, so the page cannot display it; GIFs, key remapping and
+> per-key colours are not in the app yet. VIA/QMK keyboards still work through the same *Connect* button.
 
 ## What it does
 
@@ -53,7 +57,8 @@ npm test                 # node --test: colours, RGB565, profiles, effects, driv
 | `public/index.html`, `public/css/` | The page |
 | `public/js/app.js` | Wires the page together |
 | `public/js/hid.js` | WebHID wrapper (connect, describe interfaces, send, read) |
-| `public/js/protocol.js` | **The NJ81 protocol: to be filled in** |
+| `public/js/royuan.js` | **The NJ81 vendor protocol** (identify, lighting, clock, screen pictures) |
+| `public/js/via.js`, `keycodes.js` | VIA/QMK protocol, for VIA keyboards |
 | `public/js/drivers.js` | Simulation driver and the real driver (refuses while the protocol is unknown) |
 | `public/js/profile.js`, `lighting.js`, `layout.js`, `util.js`, `i18n.js` | Profile validation, preview effects, preview layout, helpers, translations |
 | `docs/` | [Capturing the official driver](docs/capturing-usb.md) and the [protocol notes](docs/protocol-notes.md) |
