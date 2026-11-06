@@ -33,10 +33,11 @@ export const isWritable = (model) => model.family === "gen2";
 export const FAMILIES = {
   gen2: { profile: 0x84, speedTop: 4 },                                      // speed on the wire 4..0
   // backlight off is an options bit. writeGapMs: the NJ81-ED takes lighting writes closer than the
-  // 1 s gen2 floor; a write it drops shows up in the read-back and the page sends it again.
+  // 1 s gen2 floor: 16 changes 250 ms apart on a real NJ81-ED (2026-11-07) all went through, none dropped; a write it drops
+  // still shows up in the read-back and the page sends it again.
   // quietMs: how long the keyboard is left alone after a lighting write before it is read back (see #quietAfterWrite).
   // speed on the wire 4..0 too: the official driver writes MAXSPEED (4) - speed for its yc500 boards (NJ81-ED)
-  yc500: { profile: 0x85, speedTop: 4, options: { get: 0x86, set: 0x06 }, writeGapMs: 500, quietMs: 700 },
+  yc500: { profile: 0x85, speedTop: 4, options: { get: 0x86, set: 0x06 }, writeGapMs: 250, quietMs: 700 },
 };
 const LED_OFF_BIT = 0x10;
 const OPTION_BITS_KEPT = 0b1110_1001;   // win lock, WASD swap, side light off, high bits; the Mac-mode bits are not written back
