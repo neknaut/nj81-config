@@ -91,12 +91,13 @@
       <div class="row"><button id="screen-export" type="button" data-i18n="exportRgb565"></button></div>
       <div id="screen-device" hidden>
         <div class="row">
-          <label class="inline"><span data-i18n="screenSlot"></span> <select id="screen-slot"></select></label>
+          <label id="screen-slot-box" class="inline"><span data-i18n="screenSlot"></span> <select id="screen-slot"></select></label>
           <button id="screen-send" type="button" class="primary" data-i18n="screenSend"></button>
           <button id="screen-clock" type="button" data-i18n="screenClock"></button>
         </div>
         <progress id="screen-progress" hidden value="0" max="1"></progress>
         <p class="muted small" data-i18n="screenDeviceNote"></p>
+        <p id="screen-size-note" class="muted small" data-i18n="screenSizeUnknown" hidden></p>
       </div>
       <p class="muted small" data-i18n="screenNote"></p>
     </section>

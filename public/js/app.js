@@ -31,7 +31,8 @@ const njSettings = () => ({
   option: profile.lighting.nj81?.option ?? 0,
   rainbow: profile.lighting.nj81?.rainbow ?? false,
   speed: toLevel(profile.lighting.speed),
-  brightness: profile.lighting.nj81?.off ? 0 : toLevel(profile.lighting.brightness),   // "off" = the effect at brightness 0
+  brightness: toLevel(profile.lighting.brightness),
+  off: profile.lighting.nj81?.off ?? false,   // the client turns this into brightness 0 (gen2) or the backlight-off bit (yc500)
   color: profile.lighting.color,
 });
 const njPreview = (nj81) => (nj81.off ? "off" : nj81.rainbow ? "spectrum" : PREVIEW_FOR_MODE[nj81.mode] ?? "static");
@@ -228,7 +229,9 @@ const onScreenFile = async (event) => {
 const updateScreenControls = () => {
   const screen = nj?.model?.screen;
   $("screen-w").disabled = $("screen-h").disabled = Boolean(screen);
-  $("screen-device").hidden = !screen;
+  $("screen-device").hidden = !nj?.display;
+  for (const id of ["screen-slot-box", "screen-send"]) { $(id).hidden = !screen; }
+  $("screen-size-note").hidden = Boolean(screen);
   if (screen) { $("screen-slot").replaceChildren(...Array.from({ length: screen.slots }, (_, i) => new Option(String(i + 1), String(i)))); }
 };
 
@@ -359,8 +362,17 @@ const detectNj81 = async () => {
   const info = $("via-info");
   info.hidden = false;
   info.textContent = `${id.model.name} · id ${id.deviceId} · firmware ${id.firmware}`;
-  if (!isWritable(id.model)) { log(`${t("njUnsupported")}: ${info.textContent}`); return true; }
-  nj = { client, ...id };
+  let model = id.model;
+  if (!isWritable(model)) {   // older boards: ask which command set they speak (reads only)
+    const family = await client.probeFamily().catch(() => null);
+    if (!family) { log(`${t("njUnsupported")}: ${info.textContent}`); return true; }
+    client.family = family;
+    model = { ...model, family, screen: model.screen ?? null };
+    info.textContent += ` · ${family}`;
+    log(`${t("familyDetected")}: ${family}`);
+  }
+  const display = Boolean(model.screen) || await client.hasDisplay().catch(() => false);
+  nj = { client, ...id, model, display };
   try {
     const [light, active] = [await client.readLight(), await client.profile().catch(() => null)];
     profile = validateProfile({
@@ -368,7 +380,7 @@ const detectNj81 = async () => {
       lighting: { ...profile.lighting, color: light.color, brightness: fromLevel(light.brightness), speed: fromLevel(light.speed),
         nj81: { mode: modeInfo(light.mode) ? light.mode : 1, option: light.option, rainbow: light.rainbow, off: isOff(light) },
         effect: njPreview({ ...light, off: isOff(light) }) },
-      screen: { ...profile.screen, width: id.model.screen.width, height: id.model.screen.height },
+      screen: model.screen ? { ...profile.screen, width: model.screen.width, height: model.screen.height } : profile.screen,
     }).profile;
     fillEffectOptions();
     writeForm();
@@ -377,7 +389,7 @@ const detectNj81 = async () => {
     info.textContent += ` · profile ${active === null ? "?" : active + 1} · ${mode} · ${light.rainbow ? "rainbow" : light.color} · brightness ${light.brightness}/4 · speed ${light.speed}/4`;
     log(`${t("viaReady")}: ${info.textContent}`);
   } catch (error) { log(`${t("applyFailed")}: ${error.message}`); }
-  if (id.model.screen) { await syncClock(); }   // like the official driver: set the screen's clock on every connect
+  if (display) { await syncClock(); }   // like the official driver: set the screen's clock on every connect
   updateScreenControls();
   return true;
 };
@@ -439,7 +451,7 @@ let liveTimer = null;
 /* One write at a time, the latest settings win: the keyboard takes about one lighting write per second. */
 let njBusy = false;
 let njDirty = false;
-const describeNj = (s) => s.brightness === 0 ? t("lightsOff")
+const describeNj = (s) => s.off || s.brightness === 0 ? t("lightsOff")
   : `${modeInfo(s.mode)?.name ?? s.mode}${modeInfo(s.mode)?.options ? ` (${modeInfo(s.mode).options[s.option]})` : ""} · ${s.rainbow ? "rainbow" : s.color} · ${t("brightness")} ${s.brightness}/4 · ${t("speed")} ${s.speed}/4`;
 const pushNj81 = async () => {
   njDirty = true;
