@@ -611,7 +611,7 @@ const detectNj81 = async () => {
   startWatching();
   // like the official driver, the clock is set on every connect, but a little later: it is a flash write too, and the
   // lighting must not wait a second behind it right after connecting
-  if (display) { scheduleClock(3000); }
+  if (display) { scheduleClock(5000); }
   updateScreenControls();
   return true;
 };
@@ -634,7 +634,7 @@ const scheduleClock = (delayMs) => {
   clearTimeout(clockTimer);
   clockTimer = setTimeout(() => {
     if (!nj) { return; }
-    if (njBusy || njDirty || Date.now() - lastLocalChange < 2000) { scheduleClock(1500); return; }   // lighting first
+    if (njBusy || njDirty || Date.now() - lastLocalChange < 5000) { scheduleClock(2000); return; }   // lighting first: only when idle for 5 s
     syncClock();
   }, delayMs);
 };

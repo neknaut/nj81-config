@@ -259,7 +259,6 @@ export class Royuan {
     await this.sleep(150);
   }
 
-  /* Writes the lighting and reads it back; `kept` says whether the keyboard reports exactly what was sent. */
   /* `settings.off`: gen2 turns the lights off as the effect at brightness 0, yc500 with its options bit.
      The keyboard can answer the first read after a write with its previous state, so the result is read up to three times
      before a difference is believed. Returns { light, diffs } (diffs empty: the keyboard took everything). */
@@ -269,10 +268,14 @@ export class Royuan {
       await this.#serial(() => this.#write(encodeLight({ ...settings, brightness: 0 }, this.family)));
       await this.sleep(150);
       await this.#setLedOff(true);
+    } else if (yc500 && (await this.get(FAMILIES[this.family].options.get, [0]))[2] & LED_OFF_BIT) {
+      // the lights are off: switch them on FIRST, so they light up at once (with the stored effect), then the new effect
+      await this.#setLedOff(false);
+      await this.#serial(() => this.#write(encodeLight(settings, this.family)));
+      await this.sleep(150);
     } else {
       await this.#serial(() => this.#write(encodeLight(yc500 || !settings.off ? settings : { ...settings, brightness: 0 }, this.family)));
       await this.sleep(150);
-      if (yc500) { await this.#setLedOff(false); }
     }
     let light;
     let diffs = [];
