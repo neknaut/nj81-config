@@ -6,8 +6,9 @@ import { HidSession, hex4, hidSupported } from "./hid.js";
 import { Nj81Driver, SimulationDriver, ViaDriver } from "./drivers.js";
 import { CHANNEL, RGB_EFFECTS, VIA, Via, previewEffectFor } from "./via.js";
 import { LEVELS, MODES, OFF, PRESET_COLOURS, ROYUAN, Royuan, isOff, isWritable, modeInfo, pictureBytes } from "./royuan.js";
-import { hueSatToHex, rgbToHex } from "./util.js";
+import { hexToRgb, hueSatToHex, rgbToHex } from "./util.js";
 import { GALLERY, LINKS } from "./gallery.js";
+import { REACTIVE_DEFAULT, nj81KeyColor } from "./lighting-nj81.js";
 import { languages, setLanguage, t } from "./i18n.js";
 
 const $ = (id) => document.getElementById(id);
@@ -126,6 +127,10 @@ const refreshOptionControl = () => {
   $("hide-mode").hidden = !info;
   $("show-modes").hidden = !nj || (hiddenModes().size === 0 && !board().done);
   $("rename-mode").hidden = !nj || off;
+  const mode = Number($("effect").value);
+  $("reactive-box").hidden = !nj || off || !info;
+  if (nj && info) { $("reactive").checked = reactiveModes().has(mode); }
+  $("reactive-hint").hidden = $("reactive-box").hidden || !$("reactive").checked;
   const options = info?.options ?? [];
   const keep = $("light-option").value;
   $("light-option").replaceChildren(...options.map((name, i) => new Option(name, String(i))));
@@ -205,12 +210,29 @@ const onKeyClick = (key) => {
   } else {
     pressed.add(key.id);
     setTimeout(() => pressed.delete(key.id), 450);
+    notePress(key);
   }
 };
 
+/* Recent key presses (real keyboard or clicks), for the effects that react to typing. */
+const presses = [];
+const notePress = (key) => {
+  presses.push({ x: key.x + key.w / 2, y: key.y + 0.5, t: performance.now() });
+  while (presses.length && performance.now() - presses[0].t > 2500) { presses.shift(); }
+};
+
+/* With an NJ81 the drawing plays that board's own effect; otherwise the generic preview. */
+const nj81Preview = () => {
+  const l = profile.lighting;
+  if (!nj || !l.nj81) { return null; }
+  return { mode: l.nj81.mode, option: l.nj81.option, rainbow: l.nj81.rainbow, off: l.nj81.off, color: hexToRgb(l.color), level: l.brightness / 100, speed: l.speed / 100 };
+};
+
 const paintKeyboard = (time) => {
+  const nj81 = nj81Preview();
+  const reactive = nj81 ? reactiveModes() : null;
   for (const key of KEYS) {
-    const [red, green, blue] = keyColor(profile, key, time, pressed);
+    const [red, green, blue] = nj81 ? nj81KeyColor(nj81, key, time, presses, reactive) : keyColor(profile, key, time, pressed);
     const el = keyEls.get(key.id);
     el.style.setProperty("--led", rgbToHex(red, green, blue));   // the CSS of the chosen keycap colour decides how it shows
   }
@@ -386,7 +408,7 @@ const showKey = (code, down) => {
   for (const key of KEYS) {
     if (key.code !== code) { continue; }
     keyEls.get(key.id)?.classList.toggle("down", down);
-    if (down) { pressed.add(key.id); setTimeout(() => pressed.delete(key.id), 450); }
+    if (down) { pressed.add(key.id); setTimeout(() => pressed.delete(key.id), 450); notePress(key); }
   }
 };
 
@@ -444,6 +466,16 @@ const modeChoices = () => {
   const list = known.done && known.seen.length ? known.seen : MODES.map((m) => m.mode).filter((m) => !hiddenModes().has(m));
   const current = profile.lighting.nj81?.mode;
   return current && !list.includes(current) ? [...list, current] : list;
+};
+/* Effects that light only when a key is pressed. The page cannot see the LEDs, so this is a default per effect that the
+   user corrects per keyboard model with the checkbox under the menu. */
+const reactiveModes = () => { const list = board().reactive; return Array.isArray(list) ? new Set(list) : REACTIVE_DEFAULT; };
+const setReactive = (mode, on) => {
+  const known = board();
+  const set = reactiveModes();
+  if (on) { set.add(mode); } else { set.delete(mode); }
+  known.reactive = [...set];
+  saveBoard(known);
 };
 let learning = false;
 const noteSeen = (light) => {
@@ -726,7 +758,8 @@ const pushNj81 = async () => {
       noteSeen(light);
       noteResult(settings, diffs);
       showStatus(settings, light, diffs);
-      if (!diffs.length) { logOk("areaLight", `${t("applied")}${retried ? ` (${t("afterRetry")})` : ""}: ${describeNj(settings)}`); }
+      const typing = !settings.off && reactiveModes().has(settings.mode) ? ` · ${t("reactiveNote")}` : "";
+      if (!diffs.length) { logOk("areaLight", `${t("applied")}${retried ? ` (${t("afterRetry")})` : ""}: ${describeNj(settings)}${typing}`); }
       else { logWarn("areaLight", `${t("notApplied")} ${settings.off ? t("lightsOff") : modeLabel(settings.mode)}: ${describeDiffs(diffs, settings.mode)}`); }
     } catch (error) { logError("areaLight", `${t("applyFailed")}: ${error.message}`); }
   }
@@ -820,6 +853,13 @@ const init = () => {
   buildGallery();
   $("hide-mode").addEventListener("click", () => { const mode = Number($("effect").value); if (mode !== OFF) { hideMode(mode); } });
   $("learn-start").addEventListener("click", () => setLearning(true));
+  $("reactive").addEventListener("change", (event) => {
+    const mode = Number($("effect").value);
+    setReactive(mode, event.target.checked);
+    refreshOptionControl();
+    log(`${modeLabel(mode)}: ${t(event.target.checked ? "reactiveOn" : "reactiveOff")}`, "info", "areaLight");
+    event.target.blur();
+  });
   $("learn-done").addEventListener("click", () => setLearning(false));
   $("rename-mode").addEventListener("click", () => {
     const mode = Number($("effect").value);

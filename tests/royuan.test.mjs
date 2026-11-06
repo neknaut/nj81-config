@@ -211,3 +211,27 @@ test("differences name only the settings an effect has", async () => {
   assert.deepEqual(lightDifferences({ mode: 1, speed: 4, brightness: 4, color: "#00ff00" }, got).map((d) => d.field), ["brightness", "color"]);
   assert.deepEqual(lightDifferences({ off: true }, got).map((d) => d.field), ["off"]);
 });
+
+test("the drawing has a valid colour for every NJ81 effect, reactive ones dark until a key is pressed", async () => {
+  const { nj81KeyColor, REACTIVE_DEFAULT } = await import("../public/js/lighting-nj81.js");
+  const { MODES } = await import("../public/js/royuan.js");
+  const { KEYS } = await import("../public/js/layout.js");
+  for (const { mode, options } of MODES) {
+    for (const option of [0, ...(options ? [options.length - 1] : [])]) {
+      for (const rainbow of [false, true]) {
+        const s = { mode, option, rainbow, color: [255, 0, 0], level: 1, speed: 0.5, off: false };
+        for (const time of [0, 777, 4321]) {
+          for (const key of KEYS) {
+            const c = nj81KeyColor(s, key, time, [{ x: 5, y: 3, t: time - 100 }]);
+            assert.ok(c.length === 3 && c.every((v) => Number.isInteger(v) && v >= 0 && v <= 255), `mode ${mode} ${key.label}`);
+          }
+        }
+      }
+    }
+  }
+  for (const mode of REACTIVE_DEFAULT) {
+    const s = { mode, option: 0, rainbow: false, color: [255, 0, 0], level: 1, speed: 0.5, off: false };
+    assert.ok(KEYS.every((key) => nj81KeyColor(s, key, 1000, []).every((v) => v === 0)), `mode ${mode} dark without presses`);
+  }
+  assert.deepEqual(nj81KeyColor({ mode: 1, off: true }, KEYS[0], 0), [0, 0, 0]);
+});
