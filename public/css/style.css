@@ -55,8 +55,19 @@ button:focus-visible, input:focus-visible, select:focus-visible, summary:focus-v
 .key {
   position: absolute; display: grid; place-items: center; font: 600 clamp(7px, 1.1vw, 12px)/1 system-ui, sans-serif;
   color: rgba(255,255,255,0.85); border: 1px solid rgba(255,255,255,0.18); border-radius: 5px; padding: 0; cursor: pointer;
-  box-shadow: none; background: #000; text-shadow: 0 0 3px #000;
+  box-shadow: none; background: #000; text-shadow: 0 0 3px #000; --led: #000;
 }
+/* black caps: the whole cap carries the light */
+.caps-black .key { background: var(--led); }
+/* white caps (the user's NJ81): cream caps with dark legends, the light only as a soft glow from under the cap */
+.keyboard.caps-white { background: #e9e6df; border-color: #bdb8ad; }
+.caps-white .key {
+  background: #f7f5f0; color: #2b2a28; text-shadow: none; border: 1px solid #cfcac0;
+  box-shadow: 0 0 5px 1px color-mix(in srgb, var(--led) 55%, transparent), inset 0 -3px 0 #ddd8cd;
+}
+.caps-white .key.accent { background: #2f2f33; color: #f2f2f2; border-color: #1d1d20; box-shadow: 0 0 5px 1px color-mix(in srgb, var(--led) 55%, transparent), inset 0 -3px 0 #1c1c1f; }
+.caps-white .key.down { outline-color: #ff7a66; }
+.caps-choice { max-width: 220px; margin-top: 10px; }
 .screen { width: 100%; max-width: 384px; image-rendering: pixelated; background: #000; border: 2px solid var(--line); border-radius: 8px; display: block; }
 .log { background: var(--soft); border: 2px solid var(--line); border-radius: 10px; padding: 8px 10px; max-height: 220px; overflow: auto; white-space: pre-wrap; word-break: break-all; margin: 0; }
 footer { margin-top: 20px; text-align: center; }

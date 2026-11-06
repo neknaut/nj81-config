@@ -130,6 +130,17 @@ const onFormChange = (event) => {
 };
 
 /* ---------- keyboard preview ---------- */
+/* Keycap colours: white like the user's NJ81 (light shows as a soft glow around the caps, accent caps dark as on the
+   real board), or black (the whole cap shows the light). Remembered in this browser. */
+const ACCENT_KEYS = new Set(["Esc", "Enter", "Up", "Down", "Left", "Right"]);
+const CAPS_KEY = "nj81-config.caps";
+const applyCaps = (caps) => {
+  $("keyboard").classList.toggle("caps-white", caps === "white");
+  $("keyboard").classList.toggle("caps-black", caps !== "white");
+  $("caps").value = caps;
+  try { localStorage.setItem(CAPS_KEY, caps); } catch (error) { /* private mode */ }
+};
+
 const buildKeyboard = () => {
   const box = $("keyboard");
   const surface = document.createElement("div");
@@ -140,7 +151,7 @@ const buildKeyboard = () => {
     el.type = "button";
     el.tabIndex = -1;   // clicking a key must not focus it (a focused key shows a ring when the keyboard is used)
     el.addEventListener("mousedown", (event) => event.preventDefault());
-    el.className = "key";
+    el.className = ACCENT_KEYS.has(key.label) ? "key accent" : "key";   // dark caps on the real white NJ81
     el.textContent = key.label;
     el.title = key.label;
     el.style.left = `${(key.x / LAYOUT_WIDTH) * 100}%`;
@@ -176,7 +187,7 @@ const paintKeyboard = (time) => {
   for (const key of KEYS) {
     const [red, green, blue] = keyColor(profile, key, time, pressed);
     const el = keyEls.get(key.id);
-    el.style.background = rgbToHex(red, green, blue);
+    el.style.setProperty("--led", rgbToHex(red, green, blue));   // the CSS of the chosen keycap colour decides how it shows
   }
 };
 
@@ -560,6 +571,8 @@ const init = () => {
   $("apply").addEventListener("click", apply);
 
   buildKeyboard();
+  applyCaps((() => { try { return localStorage.getItem(CAPS_KEY); } catch (error) { return null; } })() === "black" ? "black" : "white");
+  $("caps").addEventListener("change", (event) => { applyCaps(event.target.value); event.target.blur(); });
   updateScreenControls();
   writeForm();
   refreshSavedList();
