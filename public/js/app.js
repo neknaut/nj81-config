@@ -639,7 +639,12 @@ const scheduleClock = (delayMs) => {
   }, delayMs);
 };
 
+/* One clock write at a time: clicks while one is on its way (or just done) are ignored. */
+let clockBusy = false;
+let clockDoneAt = 0;
 const syncClock = async () => {
+  if (clockBusy || Date.now() - clockDoneAt < 3000) { return; }
+  clockBusy = true;
   try {
     const fromServer = await measureClock();
     await nj.client.setClock(standardNow);
@@ -647,6 +652,8 @@ const syncClock = async () => {
     const drift = Math.round(clockOffsetMs / 1000);
     logOk("areaClock", `${t("clockSent")}: ${standardNow().toLocaleString()} (${zone}${fromServer ? `, ${t("clockStandard")}${drift ? `, ${t("clockDrift")} ${drift}s` : ""}` : ""})`);
   } catch (error) { logError("areaClock", `${t("applyFailed")}: ${error.message}`); }
+  clockBusy = false;
+  clockDoneAt = Date.now();
 };
 
 /* Puts what the keyboard reports into the form (on connect, and when it is changed with the keyboard's own keys). */
@@ -876,7 +883,6 @@ const init = () => {
   // a mouse click must not leave the button focused, or the next key press on the keyboard would trigger it again
   document.addEventListener("click", (event) => { if (event.detail > 0 && event.target.closest("button")) { event.target.closest("button").blur(); } });
   $("screen-send").addEventListener("click", sendPicture);
-  $("screen-clock").addEventListener("click", () => { if (nj) { syncClock(); } });
   window.addEventListener("keydown", (event) => {
     showKey(event.code, true);
     // outside a text box a key press only lights the drawing: no scrolling, no menu changes, no browser shortcuts (F11/F12 stay)
@@ -917,8 +923,6 @@ const init = () => {
     $("swatches").insertBefore(button, $("swatches").querySelector(".custom"));
   }
   for (const tab of document.querySelectorAll("[data-tab]")) { tab.addEventListener("click", () => showTab(tab.dataset.tab)); }
-  $("mini-pick").addEventListener("click", () => { showTab("screen"); $("screen-file").click(); });
-  $("mini-gallery").addEventListener("click", () => { showTab("screen"); $("gallery-box").open = true; });
   $("mini-clock").addEventListener("click", () => { if (nj) { syncClock(); } });
   $("reactive").addEventListener("change", () => renderEffectList());
   $("show-modes").addEventListener("click", () => { setHiddenModes(new Set()); const known = board(); known.done = false; saveBoard(known); const keep = $("effect").value; fillEffectOptions(); $("effect").value = keep; refreshOptionControl(); });  $("screen-file").addEventListener("change", onScreenFile);
