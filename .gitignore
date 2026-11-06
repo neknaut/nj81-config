@@ -4,3 +4,6 @@ node_modules/
 # USB captures can contain device serial numbers: keep them out of git
 *.pcap
 *.pcapng
+
+# Local analysis of the official Keydous driver (contains their code): never commit
+driver-analysis/
