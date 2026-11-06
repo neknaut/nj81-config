@@ -421,19 +421,10 @@ const download = (name, data, type) => {
 
 
 /* ---------- connection ---------- */
-/* Lighting, screen and profile controls only work with a keyboard that answered: until then they are disabled
-   (the keycap colour of the drawing stays free). Disabling remembers which controls were disabled for other reasons. */
-const KEEP_ENABLED = new Set(["caps"]);
+/* Lighting, screen and profile only make sense with a keyboard that answered: until then those cards are hidden. */
 const setControlsEnabled = (on) => {
-  for (const card of document.querySelectorAll(".needs-keyboard")) {
-    card.classList.toggle("disconnected", !on);
-    card.querySelectorAll("input, select, button, textarea").forEach((el) => {
-      if (KEEP_ENABLED.has(el.id)) { return; }
-      if (!on) { if (!el.disabled) { el.dataset.offline = "1"; el.disabled = true; } }
-      else if (el.dataset.offline) { delete el.dataset.offline; el.disabled = false; }
-    });
-    card.querySelectorAll(".file-button").forEach((el) => el.classList.toggle("disabled", !on));
-  }
+  for (const card of document.querySelectorAll(".needs-keyboard")) { card.hidden = !on; }
+  $("start-hint").hidden = on;
 };
 
 const setConnected = (on, detail) => {

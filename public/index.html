@@ -36,9 +36,13 @@
       <p id="via-info" class="small mono" hidden></p>
     </section>
 
-    <section id="light-card" class="card wide needs-keyboard" aria-labelledby="h-light">
+    <section id="start-hint" class="card wide start-hint">
+      <h2 data-i18n="startTitle"></h2>
+      <p data-i18n="startText"></p>
+    </section>
+
+    <section id="light-card" class="card wide needs-keyboard" hidden aria-labelledby="h-light">
       <h2 id="h-light" data-i18n="lighting"></h2>
-      <p class="connect-first small" data-i18n="connectFirst"></p>
       <div class="controls">
         <label>
           <span data-i18n="effect"></span>
@@ -96,9 +100,8 @@
       <p class="muted small" data-i18n="previewNote"></p>
     </section>
 
-    <section id="screen-card" class="card needs-keyboard" aria-labelledby="h-screen">
+    <section id="screen-card" class="card needs-keyboard" hidden aria-labelledby="h-screen">
       <h2 id="h-screen" data-i18n="screen"></h2>
-      <p class="connect-first small" data-i18n="connectFirst"></p>
       <div class="row">
         <label class="file-button"><span data-i18n="screenPick"></span><input id="screen-file" type="file" accept="image/*"></label>
         <label class="inline"><span data-i18n="screenFit"></span>
@@ -131,9 +134,8 @@
       <p id="screen-connect-note" class="muted small" data-i18n="screenNote"></p>
     </section>
 
-    <section id="profile-card" class="card needs-keyboard" aria-labelledby="h-profile">
+    <section id="profile-card" class="card needs-keyboard" hidden aria-labelledby="h-profile">
       <h2 id="h-profile" data-i18n="profile"></h2>
-      <p class="connect-first small" data-i18n="connectFirst"></p>
       <label>
         <span data-i18n="profileName"></span>
         <input id="profile-name" type="text" maxlength="60" value="My profile">
