@@ -91,3 +91,23 @@ test("no answer gives a clear error", async () => {
   const nj = new Royuan({ setFeature: async () => {}, getFeature: async () => new Uint8Array(64).fill(0xff) }, fast);
   await assert.rejects(() => nj.identify(), RoyuanError);
 });
+
+test("the settings interface is picked among the keyboard's interfaces", async () => {
+  const { pickInterface } = await import("../public/js/hid.js");
+  const keyboard = { collections: [{ usagePage: 1, usage: 6, featureReports: [] }] };
+  const vendor = { collections: [{ usagePage: 0xffff, usage: 2, featureReports: [{ reportId: 0 }] }] };
+  const via = { collections: [{ usagePage: 0xff60, usage: 0x61, featureReports: [] }] };
+  assert.equal(pickInterface([keyboard, vendor]), vendor);
+  assert.equal(pickInterface([keyboard, via]), via);
+  assert.equal(pickInterface([keyboard]), keyboard);
+  assert.equal(pickInterface([]), null);
+});
+
+test("the NJ81 drawing has 80 keys, Home under PgDn and the screen top right", async () => {
+  const { KEYS, SCREEN_TILE, LAYOUT_WIDTH } = await import("../public/js/layout.js");
+  assert.equal(KEYS.length, 80);
+  const home = KEYS.find((key) => key.label === "Home");
+  assert.equal(home.x + home.w, LAYOUT_WIDTH);
+  assert.ok(KEYS.filter((key) => key.y === 0).every((key) => key.x + key.w <= SCREEN_TILE.x));
+  assert.equal(SCREEN_TILE.x + SCREEN_TILE.w, LAYOUT_WIDTH);
+});

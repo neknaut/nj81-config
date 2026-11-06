@@ -62,3 +62,4 @@ button:focus-visible, input:focus-visible, select:focus-visible, summary:focus-v
 footer { margin-top: 20px; text-align: center; }
 .key.down { outline: 2px solid #fff; outline-offset: -2px; transform: translateY(1px); }
 progress { width: 100%; margin-top: 10px; }
+.screen-tile { position: absolute; background: #000; border: 2px solid #3a3a3a; border-radius: 4px; object-fit: contain; image-rendering: pixelated; }

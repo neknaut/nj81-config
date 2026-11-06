@@ -77,9 +77,9 @@
         <label>
           <span data-i18n="screenSize"></span>
           <span class="inline">
-            <input id="screen-w" type="number" min="8" max="512" value="128" aria-label="width">
+            <input id="screen-w" type="number" min="8" max="512" value="160" aria-label="width">
             <span>×</span>
-            <input id="screen-h" type="number" min="8" max="512" value="64" aria-label="height">
+            <input id="screen-h" type="number" min="8" max="512" value="80" aria-label="height">
           </span>
         </label>
         <label>
@@ -87,7 +87,7 @@
           <input id="screen-file" type="file" accept="image/*">
         </label>
       </div>
-      <canvas id="screen-canvas" class="screen" width="128" height="64"></canvas>
+      <canvas id="screen-canvas" class="screen" width="160" height="80"></canvas>
       <div class="row"><button id="screen-export" type="button" data-i18n="exportRgb565"></button></div>
       <div id="screen-device" hidden>
         <div class="row">
@@ -119,27 +119,6 @@
       <div class="row"><button id="apply" type="button" class="primary" data-i18n="apply"></button></div>
     </section>
 
-    <details class="card wide" id="lab">
-      <summary><h2 data-i18n="lab"></h2></summary>
-      <p class="notice" data-i18n="labWarn"></p>
-      <h3 data-i18n="labDevice"></h3>
-      <pre id="lab-device" class="mono small">-</pre>
-      <label class="check"><input id="lab-enable" type="checkbox"> <span data-i18n="labEnable"></span></label>
-      <div class="controls lab-form">
-        <label><span data-i18n="labType"></span>
-          <select id="lab-kind"><option value="output">output</option><option value="feature">feature</option></select>
-        </label>
-        <label><span data-i18n="labReportId"></span><input id="lab-report" type="number" min="0" max="255" value="0"></label>
-        <label class="grow"><span data-i18n="labBytes"></span><input id="lab-bytes" type="text" class="mono" placeholder="00 01 02" autocomplete="off" spellcheck="false"></label>
-      </div>
-      <div class="row">
-        <button id="lab-send" type="button" disabled data-i18n="send"></button>
-        <button id="lab-read" type="button" disabled data-i18n="receive"></button>
-        <button id="lab-clear" type="button" data-i18n="clear"></button>
-      </div>
-      <h3 data-i18n="labIncoming"></h3>
-      <pre id="lab-log" class="mono small log">-</pre>
-    </details>
 
     <section class="card wide" aria-labelledby="h-log">
       <h2 id="h-log" data-i18n="log"></h2>

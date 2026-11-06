@@ -1,12 +1,12 @@
-/* Wires the page together: connection, lighting preview, screen, profiles, protocol lab, log. */
+/* Wires the page together: connection, lighting preview, screen, profiles, log. */
 import { EFFECTS, SCREEN_LIMIT, defaultProfile, parseProfile, serializeProfile, validateProfile } from "./profile.js";
-import { KEYS, LAYOUT_HEIGHT, LAYOUT_WIDTH } from "./layout.js";
+import { KEYS, LAYOUT_HEIGHT, LAYOUT_WIDTH, SCREEN_TILE } from "./layout.js";
 import { keyColor } from "./lighting.js";
 import { HidSession, hex4, hidSupported } from "./hid.js";
 import { Nj81Driver, SimulationDriver, ViaDriver } from "./drivers.js";
 import { CHANNEL, RGB_EFFECTS, VIA, Via, previewEffectFor } from "./via.js";
 import { LEVELS, MODES, ROYUAN, Royuan, isWritable, modeInfo, pictureBytes } from "./royuan.js";
-import { bytesToHex, hexToBytes, hexToHueSat, hueSatToHex, rgbToHex, rgbaToRgb565Bytes } from "./util.js";
+import { hueSatToHex, rgbToHex, rgbaToRgb565Bytes } from "./util.js";
 import { languages, setLanguage, t } from "./i18n.js";
 
 const $ = (id) => document.getElementById(id);
@@ -135,6 +135,15 @@ const buildKeyboard = () => {
     surface.appendChild(el);
     keyEls.set(key.id, el);
   }
+  const tile = document.createElement("canvas");   // the NJ81's screen, showing the picture from the Screen card
+  tile.id = "screen-tile";
+  tile.className = "screen-tile";
+  tile.title = t("screenTile");
+  Object.assign(tile.style, {
+    left: `${(SCREEN_TILE.x / LAYOUT_WIDTH) * 100}%`, top: `${(SCREEN_TILE.y / LAYOUT_HEIGHT) * 100}%`,
+    width: `calc(${(SCREEN_TILE.w / LAYOUT_WIDTH) * 100}% - 3px)`, height: `calc(${(SCREEN_TILE.h / LAYOUT_HEIGHT) * 100}% - 3px)`,
+  });
+  surface.appendChild(tile);
   box.replaceChildren(surface);
 };
 
@@ -174,6 +183,18 @@ const drawScreen = () => {
     const w = screenPixels.width * scale;
     const h = screenPixels.height * scale;
     context.drawImage(screenPixels, (width - w) / 2, (height - h) / 2, w, h);
+  } else {
+    context.fillStyle = "#8fd3ff";
+    context.font = `bold ${Math.round(height / 3)}px system-ui, sans-serif`;
+    context.textAlign = "center";
+    context.textBaseline = "middle";
+    context.fillText("NJ81", width / 2, height / 2);
+  }
+  const tile = $("screen-tile");
+  if (tile) {
+    tile.width = width;
+    tile.height = height;
+    tile.getContext("2d").drawImage(canvas, 0, 0);
   }
 };
 
@@ -252,25 +273,23 @@ const setConnected = (on, detail) => {
   const name = $("device-name");
   name.hidden = !on;
   if (on && detail) { name.textContent = `${detail.name} · VID ${hex4(detail.vendorId)} · PID ${hex4(detail.productId)}`; }
-  $("lab-device").textContent = on && detail ? labDeviceText(detail) : "-";
-  updateLabButtons();
+  if (on && detail) {   // the interfaces, in the log, to help when something does not work
+    log(`${detail.name} VID ${hex4(detail.vendorId)} PID ${hex4(detail.productId)}: ` +
+      detail.collections.map((c) => `${hex4(c.usagePage)}/${hex4(c.usage)}${c.featureReports.length ? " feature" : ""}`).join(", "));
+  }
 };
 
-const labDeviceText = (detail) => [
-  `${detail.name}  VID ${hex4(detail.vendorId)}  PID ${hex4(detail.productId)}`,
-  ...detail.collections.map((c, i) =>
-    `#${i} usagePage ${hex4(c.usagePage)} usage ${hex4(c.usage)}  in [${c.inputReports}]  out [${c.outputReports}]  feature [${c.featureReports}]`),
-].join("\n");
-
+/* Any Keydous vendor id (every interface), any vendor collection, and VIA keyboards. */
 const DEVICE_FILTERS = [
-  ...ROYUAN.VENDOR_IDS.map((vendorId) => ({ vendorId, usagePage: ROYUAN.USAGE_PAGE })),
+  ...ROYUAN.VENDOR_IDS.map((vendorId) => ({ vendorId })),
+  { usagePage: ROYUAN.USAGE_PAGE },
   { usagePage: VIA.USAGE_PAGE, usage: VIA.USAGE },
 ];
 
 const connect = async (filters) => {
   try {
     const device = await session.request(filters);
-    if (device) { log(`${t("status_on")}: ${device.productName || "?"}`); }
+    if (!device) { log(t("noDevicePicked")); }
   } catch (error) { log(`${t("applyFailed")}: ${error.message}`); }
 };
 
@@ -363,12 +382,6 @@ session.addEventListener("connected", async (event) => {
   await detectVia(event.detail);
 });
 session.addEventListener("disconnected", () => { setConnected(false); dropVia(); });
-session.addEventListener("report", (event) => {
-  const box = $("lab-log");
-  if (box.textContent === "-") { box.textContent = ""; }
-  box.textContent += `${new Date(event.detail.time).toLocaleTimeString()}  id ${event.detail.reportId}  ${event.detail.hex}\n`;
-  box.scrollTop = box.scrollHeight;
-});
 
 /* ---------- apply ---------- */
 const apply = async () => {
@@ -397,29 +410,6 @@ const scheduleLive = () => {
   liveTimer = setTimeout(async () => {
     try { await new ViaDriver(via, viaChannel, false).apply(profile, () => {}); } catch (error) { log(`${t("applyFailed")}: ${error.message}`); }
   }, 120);
-};
-
-/* ---------- protocol lab ---------- */
-const updateLabButtons = () => {
-  const ready = $("lab-enable").checked && session.device !== null;
-  $("lab-send").disabled = !ready;
-  $("lab-read").disabled = !ready;
-};
-
-const labSend = async () => {
-  try {
-    const bytes = hexToBytes($("lab-bytes").value);
-    const reportId = Number($("lab-report").value);
-    await session.send($("lab-kind").value, reportId, bytes);
-    log(`lab ${$("lab-kind").value} id ${reportId}: ${bytesToHex(bytes)}`);
-  } catch (error) { log(`lab: ${error.message}`); }
-};
-
-const labRead = async () => {
-  try {
-    const reportId = Number($("lab-report").value);
-    log(`lab feature id ${reportId} -> ${await session.readFeature(reportId)}`);
-  } catch (error) { log(`lab: ${error.message}`); }
 };
 
 /* ---------- profiles ---------- */
@@ -495,10 +485,6 @@ const init = () => {
   $("export-json").addEventListener("click", () => { readForm(); download(`${profile.name || "profile"}.nj81.json`, serializeProfile(profile), "application/json"); });
   $("import-json").addEventListener("change", importJson);
   $("apply").addEventListener("click", apply);
-  $("lab-enable").addEventListener("change", updateLabButtons);
-  $("lab-send").addEventListener("click", labSend);
-  $("lab-read").addEventListener("click", labRead);
-  $("lab-clear").addEventListener("click", () => { $("lab-log").textContent = "-"; });
 
   buildKeyboard();
   updateScreenControls();
@@ -506,6 +492,10 @@ const init = () => {
   refreshSavedList();
   setConnected(false);
   log(hidSupported() ? "WebHID ok" : "WebHID not available");
+  if (hidSupported()) {
+    session.reconnect().catch(() => {});   // a keyboard this site was already allowed to use connects by itself
+    navigator.hid.addEventListener("disconnect", (event) => { if (event.device === session.device) { session.close(); } });
+  }
   requestAnimationFrame(frame);
 };
 

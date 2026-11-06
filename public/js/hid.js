@@ -18,6 +18,16 @@ export const describeDevice = (device) => ({
   })),
 });
 
+/* Chrome returns every interface of the keyboard that was picked: use the one that carries the settings. */
+export const interfaceScore = (device) => {
+  const collections = device.collections || [];
+  if (collections.some((c) => c.usagePage === 0xffff && (c.featureReports || []).length)) { return 3; }
+  if (collections.some((c) => c.usagePage === 0xff60 && c.usage === 0x61)) { return 2; }
+  if (collections.some((c) => c.usagePage >= 0xff00)) { return 1; }
+  return 0;
+};
+export const pickInterface = (devices) => [...devices].sort((a, b) => interfaceScore(b) - interfaceScore(a))[0] ?? null;
+
 export const hex4 = (value) => "0x" + value.toString(16).padStart(4, "0");
 
 /* Emits "report" ({ reportId, hex, time }), "connected" and "disconnected" events. */
@@ -25,9 +35,16 @@ export class HidSession extends EventTarget {
   device = null;
 
   async request(filters = []) {
-    const [device] = await navigator.hid.requestDevice({ filters });   // the browser shows its own device chooser
+    const device = pickInterface(await navigator.hid.requestDevice({ filters }));   // the browser shows its own device chooser
     if (!device) { return null; }
     await this.use(device);
+    return device;
+  }
+
+  /* Reconnects a keyboard the user already allowed on this site (no chooser). */
+  async reconnect() {
+    const device = pickInterface((await navigator.hid.getDevices()).filter((d) => interfaceScore(d) >= 2));
+    if (device) { await this.use(device); }
     return device;
   }
 
