@@ -67,8 +67,11 @@
 
     <!-- The keyboard drawing, on the Lighting and Screen tabs -->
     <section id="keyboard-panel" class="panel" aria-label="Keyboard" hidden>
+      <div class="keyboard-bar">
+        <p class="hint" data-i18n="typeHint"></p>
+        <button id="mini-clock" type="button" class="small-btn" data-i18n="screenClock" data-i18n-title="screenClockTitle"></button>
+      </div>
       <div id="keyboard" class="keyboard" role="group" aria-label="Keyboard preview"></div>
-      <p class="hint" data-i18n="typeHint"></p>
     </section>
 
     <!-- Lighting -->
@@ -132,13 +135,6 @@
             <p class="hint"><span data-i18n="effectsTried"></span>: <span id="effect-report">-</span></p>
           </div>
           <div id="mini-log" class="mini-log" aria-live="polite"></div>
-          <div class="mini-screen">
-            <div class="label" data-i18n="miniScreen"></div>
-            <canvas id="mini-screen" class="screen" width="160" height="80" aria-label="Screen"></canvas>
-            <div class="row">
-              <button id="mini-clock" type="button" data-i18n="screenClock"></button>
-            </div>
-          </div>
         </section>
       </div>
     </div>
@@ -156,23 +152,21 @@
           </div>
           </div>
           <div class="screen-right">
-          <div class="row">
-            <label class="file-button"><span data-i18n="screenPick"></span><input id="screen-file" type="file" accept="image/*"></label>
-            <label class="inline"><span data-i18n="screenFit"></span>
-              <select id="screen-fit"><option value="cover" data-i18n="fitCover"></option><option value="contain" data-i18n="fitContain"></option></select>
-            </label>
-          </div>
-          <p id="screen-name" class="hint"></p>
-          <div id="screen-device" class="apply-box" hidden>
-            <div class="row">
-              <label id="screen-slot-box" class="inline"><span data-i18n="screenSlot"></span> <select id="screen-slot"></select></label>
-              <button id="screen-send" type="button" class="primary" data-i18n="screenSend" data-i18n-title="screenSendTitle"></button>
-              <button id="screen-clear-all" type="button" data-i18n="screenClearAll" data-i18n-title="screenClearAllTitle" hidden></button>
+            <div class="screen-grid">
+              <label class="file-button"><span data-i18n="screenPick"></span><input id="screen-file" type="file" accept="image/*"></label>
+              <select id="screen-fit" data-i18n-title="screenFit" aria-label="Fit"><option value="cover" data-i18n="fitCover"></option><option value="contain" data-i18n="fitContain"></option></select>
             </div>
-            <progress id="screen-progress" hidden value="0" max="1"></progress>
-            <p id="screen-device-note" class="hint" data-i18n="screenDeviceNote"></p>
-            <p id="screen-size-note" class="hint" data-i18n="screenSizeAssumed" hidden></p>
-          </div>
+            <p id="screen-name" class="hint"></p>
+            <div id="screen-device" class="apply-box" hidden>
+              <label id="screen-slot-box" class="slot-row"><span data-i18n="screenSlot"></span><select id="screen-slot"></select></label>
+              <div class="screen-grid">
+                <button id="screen-send" type="button" class="primary" data-i18n="screenSend" data-i18n-title="screenSendTitle"></button>
+                <button id="screen-clear-all" type="button" data-i18n="screenClearAll" data-i18n-title="screenClearAllTitle" hidden></button>
+              </div>
+              <progress id="screen-progress" hidden value="0" max="1"></progress>
+              <p id="screen-device-note" class="hint" data-i18n="screenDeviceNote"></p>
+              <p id="screen-size-note" class="hint" data-i18n="screenSizeAssumed" hidden></p>
+            </div>
           </div>
           <div class="screen-gallery">
             <h3 data-i18n="gallery"></h3>

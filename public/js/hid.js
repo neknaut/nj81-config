@@ -82,6 +82,14 @@ export class HidSession extends EventTarget {
         const data = new Uint8Array(view.buffer, view.byteOffset, view.byteLength);
         return Uint8Array.from(data.length > size ? data.subarray(data.length - size) : data);
       }),
+      /* One try, no retries: for the read-back after a write, which must give the line back at once when the keyboard
+         is still busy (it refuses reads for about a second after a lighting write) so a newer change is not held up. */
+      getFeatureOnce: async () => {
+        if (!this.device) { throw new Error("No keyboard connected"); }
+        const view = await this.device.receiveFeatureReport(0);
+        const data = new Uint8Array(view.buffer, view.byteOffset, view.byteLength);
+        return Uint8Array.from(data.length > size ? data.subarray(data.length - size) : data);
+      },
       /* Input reports the keyboard sends by itself (e.g. "screen cleared": 05 2C 00 00). The listener gets the bytes with
          the report ID in front (when it is not 0), as they appear on the wire. Returns a function that stops listening. */
       /* Windows can hand a report to another HID device of the same keyboard (one per top-level collection), so every

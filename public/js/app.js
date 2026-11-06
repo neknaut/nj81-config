@@ -283,14 +283,8 @@ const drawScreen = () => {
     const h = screenPixels.height * scale;
     context.drawImage(screenPixels, (width - w) / 2, (height - h) / 2, w, h);
   } else {
-    context.fillStyle = "#8fd3ff";
-    context.font = `bold ${Math.round(height / 3)}px system-ui, sans-serif`;
-    context.textAlign = "center";
-    context.textBaseline = "middle";
-    context.fillText("NJ81", width / 2, height / 2);
+    GALLERY[0].draw(context, width, height);   // the default picture: "Nek NauT", white on black
   }
-  const mini = $("mini-screen");
-  if (mini) { mini.width = width; mini.height = height; mini.getContext("2d").drawImage(canvas, 0, 0); }
   const tile = $("screen-tile");
   if (tile) {
     tile.width = width;
@@ -340,6 +334,7 @@ const stopGif = () => {
   if (gif) { clearTimeout(gif.timer); }
   gif = null;
   $("gif-controls").hidden = true;
+  $("screen-slot-box").hidden = true;   // the slot picker is for GIFs; a still picture goes to the first slot
 };
 
 const setScreenSource = (source, name) => {
@@ -351,11 +346,40 @@ const setScreenSource = (source, name) => {
 };
 
 let screenFile = null;   // the file on show (null: a picture from the library)
+/* The picture chosen on this machine (each browser keeps its own: several people can use the page): a library picture
+   by its id in localStorage, a file (a GIF is too big for localStorage) in IndexedDB. Shown again on the next visit,
+   connected or not. The keyboard cannot report the picture it shows, so nothing is read from it. */
+const CHOSEN_KEY = "nj81-config.chosen";
+const rememberChosen = (choice) => {
+  try {
+    if (choice.gallery) { localStorage.setItem(CHOSEN_KEY, JSON.stringify({ gallery: choice.gallery })); pictureStore("readwrite", (store) => store.delete(CHOSEN_KEY)); }
+    else { localStorage.setItem(CHOSEN_KEY, JSON.stringify({ file: true })); pictureStore("readwrite", (store) => store.put({ blob: choice.file, name: choice.file.name, type: choice.file.type, at: Date.now() }, CHOSEN_KEY)); }
+  } catch (error) { /* private mode: nothing kept */ }
+};
+const restoreChosen = async () => {
+  let choice = null;
+  try { choice = JSON.parse(localStorage.getItem(CHOSEN_KEY) || "null"); } catch (error) { choice = null; }
+  if (!choice) { return; }
+  if (choice.gallery) {
+    const item = GALLERY.find((g) => g.id === choice.gallery);
+    const button = item && [...$("gallery").children].find((b) => b.title === item.name);
+    if (button) { stopGif(); screenFile = null; setScreenSource(button.querySelector("canvas"), item.name); $("screen-send").classList.remove("pending"); }
+    return;
+  }
+  const kept = await pictureStore("readonly", (store) => store.get(CHOSEN_KEY));
+  if (!kept?.blob) { return; }
+  try {
+    await loadScreenFile(new File([kept.blob], kept.name || "picture", { type: kept.type || kept.blob.type }), { restored: true });
+    $("screen-send").classList.remove("pending");
+  } catch (error) { /* a broken entry: the default picture stays */ }
+};
+
 const loadScreenFile = async (file, { restored = false } = {}) => {
   stopGif();
   const frames = file.type === "image/gif" || file.type === "image/webp" || file.type === "image/png" ? await decodeAnimation(file).catch(() => null) : null;
   if (frames) {
     gif = { frames, index: 0, timer: null, playing: false };
+    $("screen-slot-box").hidden = !(nj?.model?.screen?.slots > 1);
     $("gif-frame").max = String(frames.length - 1);
     $("gif-controls").hidden = false;
     setScreenSource(frames[0].bitmap, file.name);
@@ -367,6 +391,7 @@ const loadScreenFile = async (file, { restored = false } = {}) => {
     if (!restored) { log(`${file.name} (${screenPixels.width}×${screenPixels.height})`, "info", "areaScreen"); }
   }
   screenFile = file;
+  if (!restored) { rememberChosen({ file }); }
 };
 const onScreenFile = async (event) => {
   const [file] = event.target.files;
@@ -387,7 +412,7 @@ const buildGallery = () => {
     button.className = "thumb";
     button.title = item.name;
     button.append(canvas, Object.assign(document.createElement("span"), { textContent: item.name }));
-    button.addEventListener("click", () => { stopGif(); screenFile = null; setScreenSource(canvas, item.name); });
+    button.addEventListener("click", () => { stopGif(); screenFile = null; setScreenSource(canvas, item.name); rememberChosen({ gallery: item.id }); });
     return button;
   });
   $("gallery").replaceChildren(...items);
@@ -414,7 +439,7 @@ const updateScreenControls = () => {
   $("screen-device").hidden = !nj?.display;
   $("screen-connect-note").hidden = Boolean(nj?.display);
   $("screen-send").hidden = !screen;
-  $("screen-slot-box").hidden = !screen || screen.slots < 2;
+  $("screen-slot-box").hidden = !screen || screen.slots < 2 || !gif;   // only once a GIF is chosen
   $("screen-clear-all").hidden = !(nj?.display && nj.client.family === "yc500");   // the driver's Clear, captured on an NJ81-ED
   $("screen-size-note").hidden = !screen?.assumed;
   $("screen-device-note").hidden = !screen || screen.assumed;
@@ -552,7 +577,7 @@ const sendPicture = async () => {
   drawScreen();
   const canvas = $("screen-canvas");
   const capture = () => canvas.getContext("2d", { willReadFrequently: true }).getImageData(0, 0, width, height).data;
-  const slot = Number($("screen-slot").value);
+  const slot = gif ? Number($("screen-slot").value) : 0;   // a still picture: the first slot
   const bar = $("screen-progress");
   const progress = (done, total) => {
     bar.max = total;
@@ -830,6 +855,7 @@ const syncClock = async () => {
 /* Puts what the keyboard reports into the form (on connect, and when it is changed with the keyboard's own keys). */
 let lastBoardLight = "";
 const showKeyboardLight = (light) => {
+  lastDoneKey = "";   // the keyboard was read (on connect, or changed with its own keys): any choice is sent again
   noteSeen(light);
   lastBoardLight = JSON.stringify(light);
   profile = validateProfile({
@@ -898,13 +924,18 @@ const dropKeyboard = () => {
   if (had) { fillEffectOptions(); writeForm(); }
 };
 
+/* One log per connection: connecting starts an empty log, disconnecting clears it. */
+const clearLog = () => { $("log").replaceChildren(); $("mini-log").replaceChildren(); };
 session.addEventListener("connected", async (event) => {
+  clearLog();
+  effectReport.clear();
+  $("effect-report").replaceChildren();
   setConnected(true, event.detail);
   const vendor = event.detail.collections.some((c) => c.usagePage === ROYUAN.USAGE_PAGE && ROYUAN.USAGES.includes(c.usage));
   if (!vendor) { logWarn("areaConn", t("njNoInterface")); return; }
   await detectNj81();
 });
-session.addEventListener("disconnected", () => { setConnected(false); dropKeyboard(); });
+session.addEventListener("disconnected", () => { setConnected(false); dropKeyboard(); clearLog(); effectReport.clear(); $("effect-report").replaceChildren(); $("light-status").hidden = true; });
 
 /* ---------- apply ---------- */
 /* "Apply" (profile card): sends the whole profile's lighting to the keyboard. */
@@ -915,6 +946,7 @@ const apply = () => {
 
 /* One write at a time, the latest settings win: the keyboard takes about one lighting write per second. */
 let njBusy = false;
+let lastDoneKey = "";   // the settings the keyboard last confirmed
 let njDirty = false;
 const describeNj = (s) => isOff(s) ? t("lightsOff")
   : `${modeLabel(s.mode)}${modeInfo(s.mode)?.options ? ` (${optionLabel(s.mode, s.option) ?? s.option})` : ""} · ${s.rainbow ? t("rainbowShort") : s.color} · ${t("brightness")} ${s.brightness}/${brightnessTop} · ${t("speed")} ${s.speed}/${LEVELS}`;
@@ -954,8 +986,11 @@ const showStatus = (settings, light, diffs) => {
       cell(`${fieldValue(field, field === "off" ? isOff(light) : light[field], settings.mode)} · ${t(ok ? "match" : "differs")}`, ok ? "ok" : "bad"));
     return tr;
   }));
-  $("effect-report").textContent = [...effectReport].map(([mode, r]) =>
-    `${mode === OFF ? t("lightsOff") : modeLabel(mode)} ${r.bad ? `⚠️ (${r.issue})` : "✅"}`).join(" · ");
+  $("effect-report").replaceChildren(...[...effectReport].map(([mode, r]) => {
+    const item = Object.assign(document.createElement("span"), { className: "report-item", textContent: mode === OFF ? t("lightsOff") : modeLabel(mode) });
+    item.append(Object.assign(document.createElement("span"), { className: `tag-state ${r.bad ? "bad" : "ok"}`, textContent: r.bad ? `${t("differs")}: ${r.issue}` : t("match") }));
+    return item;
+  }));
   $("light-status").hidden = false;
 };
 
@@ -967,20 +1002,37 @@ const pushNj81 = async () => {
   while (njDirty && nj) {
     njDirty = false;
     const settings = njSettings();
+    const key = JSON.stringify(settings);
+    if (key === lastDoneKey) { continue; }   // the same as what the keyboard already confirmed (a click fires input and change)
     const asked = Date.now();
-    const superseded = () => njDirty;   // newer settings are waiting: do not hold them up checking these
+    // newer settings are waiting: do not hold them up checking these. The same settings again are not newer.
+    const superseded = () => {
+      if (!njDirty) { return false; }
+      if (JSON.stringify(njSettings()) === key) { njDirty = false; return false; }
+      return true;
+    };
     const onSent = () => { if (!njDirty) { setConfirm("sent"); } };
     try {
-      let { light, diffs, sentAt, superseded: stale } = await nj.client.writeLight(settings, { superseded, onSent });
+      let { light, diffs, sentAt, superseded: stale, unconfirmed } = await nj.client.writeLight(settings, { superseded, onSent });
       // the first write of this change (lights back on before the effect), waiting for the flash gap or a busy keyboard
       const sentAfter = Math.max(0, Math.round((sentAt ?? asked) - asked));
+      if (unconfirmed) {   // sent, but the keyboard would not answer the read-back: the watch reads it again in a moment
+        lastLocalChange = 0;
+        setConfirm("sent");
+        logWarn("areaLight", `${t("sentNotConfirmed")}: ${describeNj(settings)} (${t("sentAfter")} ${sentAfter} ms)`);
+        continue;
+      }
       let retried = false;
       if (diffs.length && !njDirty && !stale) {   // not taken: send the same once more (a write can be dropped while the keyboard is busy)
         log(`${t("retrying")}: ${describeDiffs(diffs, settings.mode)}`, "info", "areaLight");
         ({ light, diffs, superseded: stale } = await nj.client.writeLight(settings, { superseded, onSent }));
         retried = true;
       }
-      if (stale) { lastBoardLight = JSON.stringify(light); continue; }   // the newer settings are sent next and reported
+      if (stale) {   // sent, then a newer change came before the check: it goes out next and is reported
+        if (light) { lastBoardLight = JSON.stringify(light); }
+        log(`${t("replacedByNext")}: ${describeNj(settings)} (${t("sentAfter")} ${sentAfter} ms)`, "info", "areaLight");
+        continue;
+      }
       lastBoardLight = JSON.stringify(light);
       noteSeen(light);
       noteResult(settings, diffs);
@@ -988,6 +1040,7 @@ const pushNj81 = async () => {
       const typing = !settings.off && reactiveModes().has(settings.mode) ? ` · ${t("reactiveNote")}` : "";
       setConfirm(!diffs.length);
       const timing = ` (${t("sentAfter")} ${sentAfter} ms, ${t("confirmedAfter")} ${Date.now() - asked} ms)`;
+      if (!diffs.length) { lastDoneKey = key; }
       if (!diffs.length) { logOk("areaLight", `${t("applied")}${retried ? ` (${t("afterRetry")})` : ""}: ${describeNj(settings)}${typing}${timing}`); }
       else { logWarn("areaLight", `${t("notApplied")} ${settings.off ? t("lightsOff") : modeLabel(settings.mode)}: ${describeDiffs(diffs, settings.mode)}`); }
     } catch (error) { logError("areaLight", `${t("applyFailed")}: ${why(error)}`); }
@@ -1077,6 +1130,7 @@ const init = () => {
   $("screen-slot").addEventListener("change", () => { screenPixels = null; showLastPicture(); });
   $("gif-frame").addEventListener("input", (event) => { if (gif) { playGif(false); showGifFrame(Number(event.target.value)); } });
   buildGallery();
+  restoreChosen();   // the picture this browser chose last time
   $("learn-start").addEventListener("click", () => setLearning(true));
   $("reactive").addEventListener("change", (event) => {
     const mode = Number($("effect").value);
@@ -1094,7 +1148,7 @@ const init = () => {
   }
   // "Clear log" (Status and Log): empties both views of the log; the keyboard is not touched
   for (const clear of document.querySelectorAll(".clear-log")) {
-    clear.addEventListener("click", () => { $("log").replaceChildren(); $("mini-log").replaceChildren(); });
+    clear.addEventListener("click", clearLog);
   }
   for (const tab of document.querySelectorAll("[data-tab]")) { tab.addEventListener("click", () => showTab(tab.dataset.tab)); }
   $("mini-clock").addEventListener("click", () => { if (nj) { syncClock(); } });
