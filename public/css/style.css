@@ -53,27 +53,43 @@ button:focus-visible, input:focus-visible, select:focus-visible, summary:focus-v
 .chip.off { background: var(--soft); }
 .keyboard { position: relative; width: 100%; background: #0e0b24; border: 2px solid var(--line); border-radius: 14px; padding: 10px; }
 .keyboard .keys { position: relative; width: 100%; }
+/* Each key is drawn like a real cap: a wide base (the sides) with a smaller top face set towards the back, the legend on
+   the top face. --side and --top are the two shades; the light shows as a glow from under the cap. */
 .key {
-  position: absolute; display: grid; place-items: center; font: 600 clamp(7px, 1.1vw, 12px)/1 system-ui, sans-serif;
-  color: rgba(255,255,255,0.85); border: 1px solid rgba(255,255,255,0.18); border-radius: 5px; padding: 0; cursor: pointer;
-  box-shadow: none; background: #000; text-shadow: 0 0 3px #000; --led: #000;
+  position: absolute; padding: 0; cursor: pointer; border: 0; border-radius: 6px; --led: #000;
+  font: 600 clamp(7px, 1.1vw, 12px)/1 system-ui, sans-serif; color: var(--legend);
+  background: linear-gradient(to bottom, var(--side-light), var(--side));
+  box-shadow: 0 0 9px 2px var(--glow), 0 1px 0 rgba(0, 0, 0, 0.6);
 }
-/* black caps: the whole cap carries the light */
-.caps-black .key { background: var(--led); }
-/* white caps (the user's NJ81): cream caps with dark legends, the light only as a soft glow from under the cap */
-/* toned down so the light stands out: grey-cream caps on a dark plate, a strong glow, caps tinted by the light */
+.cap-top {
+  position: absolute; left: 13%; right: 13%; top: 6%; bottom: 24%; display: grid; place-items: center;
+  border-radius: 4px; background: linear-gradient(to bottom, var(--top-light), var(--top));
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.35), 0 1px 2px rgba(0, 0, 0, 0.35); pointer-events: none;
+}
+/* black caps: the light fills the cap */
+.caps-black .key {
+  --side: color-mix(in srgb, var(--led) 55%, #000); --side-light: color-mix(in srgb, var(--led) 70%, #000);
+  --top: var(--led); --top-light: color-mix(in srgb, var(--led) 80%, #fff); --legend: rgba(255, 255, 255, 0.9);
+  --glow: transparent; text-shadow: 0 0 3px #000;
+}
+/* white caps (the user's NJ81), toned down on a dark plate so the light stands out */
 .keyboard.caps-white { background: #2a2826; border-color: #141312; }
 .caps-white .key {
-  background: color-mix(in srgb, var(--led) 18%, #b9b4aa); color: #24221f; text-shadow: none; border: 1px solid #8f8a80;
-  box-shadow: 0 0 9px 2px color-mix(in srgb, var(--led) 90%, transparent), inset 0 -3px 0 #9d988e;
+  --side: color-mix(in srgb, var(--led) 20%, #8c877d); --side-light: color-mix(in srgb, var(--led) 20%, #a39e94);
+  --top: color-mix(in srgb, var(--led) 16%, #bdb8ae); --top-light: color-mix(in srgb, var(--led) 12%, #cfcac0);
+  --legend: #24221f; --glow: color-mix(in srgb, var(--led) 90%, transparent);
 }
-.caps-white .key.accent { background: color-mix(in srgb, var(--led) 12%, #2f2f33); color: #f2f2f2; border-color: #1d1d20; box-shadow: 0 0 9px 2px color-mix(in srgb, var(--led) 90%, transparent), inset 0 -3px 0 #1c1c1f; }
+.caps-white .key.accent {
+  --side: color-mix(in srgb, var(--led) 12%, #1b1b1e); --side-light: color-mix(in srgb, var(--led) 12%, #26262a);
+  --top: color-mix(in srgb, var(--led) 10%, #34343a); --top-light: color-mix(in srgb, var(--led) 8%, #424248); --legend: #f2f2f2;
+}
 .caps-white .key.down { outline-color: #ff7a66; }
 .caps-choice { max-width: 220px; margin-top: 10px; }
 .screen { width: 100%; max-width: 480px; aspect-ratio: 2 / 1; margin-top: 12px; image-rendering: pixelated; background: #000; border: 2px solid var(--line); border-radius: 8px; display: block; }
 .log { background: var(--soft); border: 2px solid var(--line); border-radius: 10px; padding: 8px 10px; max-height: 220px; overflow: auto; white-space: pre-wrap; word-break: break-all; margin: 0; }
 footer { margin-top: 20px; text-align: center; }
-.key.down { outline: 2px solid #fff; outline-offset: -2px; transform: translateY(1px); }
+.key.down { outline: 2px solid #fff; outline-offset: -2px; }
+.key.down .cap-top { top: 12%; bottom: 18%; }   /* pressed: the top face goes down */
 progress { width: 100%; margin-top: 10px; }
 .screen-tile { position: absolute; background: #000; border: 2px solid #3a3a3a; border-radius: 4px; object-fit: contain; image-rendering: pixelated; }
 .key:focus, .key:focus-visible { outline: none; }

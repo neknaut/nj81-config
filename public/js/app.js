@@ -174,7 +174,7 @@ const buildKeyboard = () => {
     el.tabIndex = -1;   // clicking a key must not focus it (a focused key shows a ring when the keyboard is used)
     el.addEventListener("mousedown", (event) => event.preventDefault());
     el.className = ACCENT_KEYS.has(key.label) ? "key accent" : "key";   // dark caps on the real white NJ81
-    el.textContent = key.label;
+    el.replaceChildren(Object.assign(document.createElement("span"), { className: "cap-top", textContent: key.label }));   // the cap's top face
     el.title = key.label;
     el.style.left = `${(key.x / LAYOUT_WIDTH) * 100}%`;
     el.style.top = `${(key.y / LAYOUT_HEIGHT) * 100}%`;
