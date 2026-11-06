@@ -72,12 +72,14 @@ button:focus-visible, input:focus-visible, select:focus-visible, summary:focus-v
   --top: var(--led); --top-light: color-mix(in srgb, var(--led) 80%, #fff); --legend: rgba(255, 255, 255, 0.9);
   --glow: transparent; text-shadow: 0 0 3px #000;
 }
-/* white caps (the user's NJ81), toned down on a dark plate so the light stands out */
-.keyboard.caps-white { background: #2a2826; border-color: #141312; }
+/* white caps on a white case (the user's NJ81): the caps stay white; the light shows through the sides of each cap and as a
+   glow on the plate around it, strong enough to read on white */
+.keyboard.caps-white { background: #f1efea; border-color: #cfcbc2; box-shadow: inset 0 2px 6px rgba(0, 0, 0, 0.12); }
 .caps-white .key {
-  --side: color-mix(in srgb, var(--led) 20%, #8c877d); --side-light: color-mix(in srgb, var(--led) 20%, #a39e94);
-  --top: color-mix(in srgb, var(--led) 16%, #bdb8ae); --top-light: color-mix(in srgb, var(--led) 12%, #cfcac0);
-  --legend: #24221f; --glow: color-mix(in srgb, var(--led) 90%, transparent);
+  --side: color-mix(in srgb, var(--led) 45%, #d9d5cc); --side-light: color-mix(in srgb, var(--led) 30%, #e6e2da);
+  --top: #f4f2ed; --top-light: #fbfaf7;
+  --legend: #2b2a28; --glow: color-mix(in srgb, var(--led) 95%, transparent);
+  box-shadow: 0 0 10px 3px var(--glow), 0 1px 0 rgba(0, 0, 0, 0.25);
 }
 .caps-white .key.accent {
   --side: color-mix(in srgb, var(--led) 12%, #1b1b1e); --side-light: color-mix(in srgb, var(--led) 12%, #26262a);
