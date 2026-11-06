@@ -64,8 +64,7 @@ npm test                 # node --test: protocol, effects drawing, profiles, col
 | `public/js/profile.js`, `util.js`, `i18n.js` | Profile validation, colour helpers, translations |
 | `docs/` | [Protocol notes](docs/protocol-notes.md) and [capturing the official driver](docs/capturing-usb.md) (for models not on file) |
 
-Plain ES modules, no build step and no dependencies. The interface follows prototype option A (dark control panel: sidebar with the
-connection and the Lighting / Screen / Profile / Log tabs, the keyboard drawing, then effects, settings and status side by side).
+Plain ES modules, no build step and no dependencies.
 
 ## License
 
