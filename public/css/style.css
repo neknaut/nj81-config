@@ -44,6 +44,7 @@ a { color: var(--accent); } a:hover { color: #b9ceff; }
 .sub { margin-top: 6px; color: var(--muted); font-size: 14px; }
 .pill { display: inline-flex; align-items: center; gap: 8px; padding: 8px 14px; border-radius: 999px; background: var(--ok-bg); color: var(--ok-ink); font-size: 14px; font-weight: 600; }
 .pill.warn { background: var(--warn-bg); color: var(--warn-ink); }
+.pill.pending { background: var(--accent-bg); color: var(--accent); }
 
 .tab { display: flex; flex-direction: column; gap: 24px; }
 .panel { background: var(--panel); border: 1px solid var(--line); border-radius: 16px; padding: 20px; display: flex; flex-direction: column; gap: 14px; min-width: 0; }
@@ -159,6 +160,21 @@ input[type="text"], select { font: inherit; color: var(--ink); background: var(-
 /* ---------- screen ---------- */
 .screen { width: 100%; max-width: 320px; aspect-ratio: 2 / 1; image-rendering: pixelated; background: #000; border: 1px solid #2a3039; border-radius: 8px; display: block; }
 .screen.big { max-width: 560px; }
+/* Screen tab: the controls on the left, the preview small on their right; stacked on a phone (preview first) */
+.screen-layout { display: grid; grid-template-columns: auto minmax(0, 240px) minmax(0, 1fr); grid-template-areas: "controls preview gallery"; gap: 20px; align-items: start; }
+.screen-gallery { grid-area: gallery; min-width: 0; }
+.screen-gallery h3 { font-size: 15px; }
+.screen-gallery .gallery { grid-template-columns: repeat(auto-fill, minmax(84px, 1fr)); gap: 6px; margin-top: 8px; }
+.screen-gallery .thumb { font-size: 11px; padding: 4px; }
+@media (max-width: 1200px) { .screen-layout { grid-template-columns: auto minmax(0, 240px); grid-template-areas: "controls preview" "gallery gallery"; } }
+.screen-left { grid-area: preview; }
+.screen-right { grid-area: controls; }
+.screen-left, .screen-right { display: flex; flex-direction: column; gap: 10px; min-width: 0; }
+.screen-left .screen { max-width: none; }
+.screen-left #gif-controls { flex-wrap: nowrap; }
+#gif-play { white-space: nowrap; flex: none; }
+@media (max-width: 760px) { .screen-layout { grid-template-columns: minmax(0, 1fr); grid-template-areas: "preview" "controls" "gallery"; gap: 14px; } .screen-left { max-width: 280px; } }
+#screen-send { min-width: 13em; }   /* the label turns into "Sending… 37%" without the button changing size */
 progress { width: 100%; accent-color: var(--accent); }
 input[type="range"] { accent-color: var(--accent); }
 .gallery-box { border-top: 1px solid var(--line); padding-top: 14px; display: flex; flex-direction: column; gap: 8px; }
