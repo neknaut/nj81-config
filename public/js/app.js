@@ -53,6 +53,8 @@ const log = (message, level = "info", area = "") => {
   }
 };
 const logOk = (area, message) => log(message, "ok", area);
+/* WebHID's own messages ("Failed to write the feature report") say little: name the likely cause. */
+const why = (error) => (error?.busy ? `${t("hidBusy")} (${error.attempts}×: ${error.message})` : error?.message ?? String(error));
 const logWarn = (area, message) => log(message, "warn", area);
 const logError = (area, message) => log(message, "error", area);
 
@@ -77,7 +79,8 @@ const readForm = () => {
       ...profile.lighting, color: $("color").value, brightness: $("brightness").value, speed: $("speed").value,
       ...(nj ? (() => {
         const chosen = Number($("effect").value);
-        const off = chosen === OFF || Number($("brightness").value) === 0;
+        // gen2 has no off switch: brightness 0 is off there; on yc500 brightness 0 is a level and off is its own switch
+        const off = chosen === OFF || (nj.client.family === "gen2" && Number($("brightness").value) === 0);
         const nj81 = chosen === OFF
           ? { ...(profile.lighting.nj81 ?? { mode: 1, option: 0, rainbow: false }), off: true }
           : { mode: chosen, option: Number($("light-option").value || 0), rainbow: $("rainbow").checked, off };
@@ -340,6 +343,7 @@ const stopGif = () => {
 };
 
 const setScreenSource = (source, name) => {
+  $("screen-send").classList.add("pending");
   screenPixels = source;
   profile.screen.name = name;
   $("screen-name").textContent = `${name} · ${source.width}×${source.height} → ${profile.screen.width}×${profile.screen.height}`;
@@ -396,10 +400,32 @@ const updateScreenControls = () => {
   const screen = nj?.model?.screen;
   $("screen-device").hidden = !nj?.display;
   $("screen-connect-note").hidden = Boolean(nj?.display);
-  $("screen-device-note").hidden = !screen;
   for (const id of ["screen-slot-box", "screen-send"]) { $(id).hidden = !screen; }
-  $("screen-size-note").hidden = Boolean(screen);
+  $("screen-size-note").hidden = !screen?.assumed;
+  $("screen-device-note").hidden = !screen || screen.assumed;
   if (screen) { $("screen-slot").replaceChildren(...Array.from({ length: screen.slots }, (_, i) => new Option(String(i + 1), String(i)))); }
+  $("screen-slot-box").hidden = !screen || screen.slots < 2;
+  if (nj) { showLastPicture(); }
+};
+
+/* The keyboard cannot report the picture its screen shows, so the page remembers the last one it sent from this browser
+   (per keyboard model and slot) and shows it again on connect. */
+const pictureKey = (slot) => `nj81-config.picture.${nj?.deviceId ?? "none"}.${slot}`;
+const rememberPicture = (canvas, slot) => {
+  try { localStorage.setItem(pictureKey(slot), JSON.stringify({ url: canvas.toDataURL("image/png"), name: profile.screen.name, at: Date.now() })); } catch (error) { /* full or private */ }
+};
+const showLastPicture = async () => {
+  if (screenPixels) { return; }   // the user already picked one
+  let saved = null;
+  try { saved = JSON.parse(localStorage.getItem(pictureKey(Number($("screen-slot").value) || 0)) || "null"); } catch (error) { saved = null; }
+  if (!saved?.url) { $("screen-name").textContent = t("noPictureSent"); return; }
+  try {
+    const image = new Image();
+    image.src = saved.url;
+    await image.decode();
+    setScreenSource(await createImageBitmap(image), saved.name || "");
+    $("screen-name").textContent = `${t("lastPictureSent")} ${new Date(saved.at).toLocaleString()}${saved.name ? ` · ${saved.name}` : ""}`;
+  } catch (error) { /* a broken entry: nothing to show */ }
 };
 
 const sendPicture = async () => {
@@ -419,9 +445,11 @@ const sendPicture = async () => {
   try {
     await nj.client.uploadPicture(slot, pictureBytes(data, width, height), nj.model.screen, (done, total) => { bar.max = total; bar.value = done; });
     logOk("areaScreen", `${t("pictureSent")} ${slot + 1}`);
-  } catch (error) { logError("areaScreen", `${t("applyFailed")}: ${error.message}`); }
+    rememberPicture(canvas, slot);
+  } catch (error) { logError("areaScreen", `${t("applyFailed")}: ${why(error)}`); }
   $("screen-send").disabled = false;
   bar.hidden = true;
+  $("screen-send").classList.remove("pending");
 };
 
 /* A text box keeps its keys; everywhere else the page swallows them while you try the keyboard. */
@@ -514,7 +542,7 @@ const connect = async (filters) => {
     const device = await session.request(filters);
     if (device) { setAutoConnect(true); }
     if (!device) { logWarn("areaConn", t("noDevicePicked")); }
-  } catch (error) { logError("areaConn", `${t("applyFailed")}: ${error.message}`); }
+  } catch (error) { logError("areaConn", `${t("applyFailed")}: ${why(error)}`); }
 };
 
 /* Effects this keyboard does not run (it did not keep them, or the user hid them), remembered per keyboard model. */
@@ -592,6 +620,9 @@ const detectNj81 = async () => {
     logOk("areaConn", `${t("familyDetected")}: ${family}`);
   }
   const display = Boolean(model.screen) || await client.hasDisplay().catch(() => false);
+  // A display whose size is not on file (NJ81-ED): the NJ81 family uses a 0.96" 160x80 panel, so pictures go out at that
+  // size, into the first picture only. The keyboard must answer the announce as ready before anything is sent.
+  if (display && !model.screen) { model = { ...model, screen: { width: 160, height: 80, slots: 1, assumed: true } }; }
   nj = { client, ...id, model, display };
   setControlsEnabled(true);
   try {
@@ -606,7 +637,7 @@ const detectNj81 = async () => {
     info.textContent += ` · profile ${active === null ? "?" : active + 1}`;
     logOk("areaConn", `${t("viaReady")}: ${info.textContent}`);
     logOk("areaLight", `${t("lightNow")}: ${describeNj(light)}`);
-  } catch (error) { logError("areaLight", `${t("applyFailed")}: ${error.message}`); }
+  } catch (error) { logError("areaLight", `${t("applyFailed")}: ${why(error)}`); }
   if (nj.client.family !== "gen2") { const known = board(); if (known.family !== nj.client.family) { known.family = nj.client.family; saveBoard(known); } }
   startWatching();
   // like the official driver, the clock is set on every connect, but a little later: it is a flash write too, and the
@@ -651,7 +682,7 @@ const syncClock = async () => {
     const zone = Intl.DateTimeFormat().resolvedOptions().timeZone;
     const drift = Math.round(clockOffsetMs / 1000);
     logOk("areaClock", `${t("clockSent")}: ${standardNow().toLocaleString()} (${zone}${fromServer ? `, ${t("clockStandard")}${drift ? `, ${t("clockDrift")} ${drift}s` : ""}` : ""})`);
-  } catch (error) { logError("areaClock", `${t("applyFailed")}: ${error.message}`); }
+  } catch (error) { logError("areaClock", `${t("applyFailed")}: ${why(error)}`); }
   clockBusy = false;
   clockDoneAt = Date.now();
 };
@@ -678,18 +709,19 @@ const startWatching = () => {
   clearTimeout(watchTimer);
   const tick = async () => {
     if (!nj) { return; }
-    if (!njBusy && !njDirty && Date.now() - lastLocalChange > 2500) {
+    if (!njBusy && !njDirty && Date.now() - lastLocalChange > 3000) {
       try {
         const light = await nj.client.readLight();
         if (JSON.stringify(light) !== lastBoardLight && nj) {
           const learned = noteSeen(light);
-          log(`${t("keyboardChanged")}: ${describeNj(light)}`, "kbd", "areaLight");
+          const raw = typeof light.off === "boolean" ? ` (${t("offSwitch")}: ${t(light.off ? "yes" : "no")}, ${t("brightness")} ${light.brightness})` : "";
+          log(`${t("keyboardChanged")}: ${describeNj(light)}${raw}`, "kbd", "areaLight");
           if (learned && learning) { log(`${t("learnedMode")}: ${modeLabel(light.mode)} (${t("modeNumber")} ${light.mode})`, "ok", "areaLight"); }
           showKeyboardLight(light);
         }
       } catch (error) { /* unplugged or busy: try again next time */ }
     }
-    watchTimer = setTimeout(tick, learning ? 600 : 1500);
+    watchTimer = setTimeout(tick, learning ? 700 : 2500);
   };
   watchTimer = setTimeout(tick, 1500);
 };
@@ -744,7 +776,7 @@ const apply = () => {
 /* One write at a time, the latest settings win: the keyboard takes about one lighting write per second. */
 let njBusy = false;
 let njDirty = false;
-const describeNj = (s) => s.off || s.brightness === 0 ? t("lightsOff")
+const describeNj = (s) => isOff(s) ? t("lightsOff")
   : `${modeLabel(s.mode)}${modeInfo(s.mode)?.options ? ` (${modeInfo(s.mode).options[s.option] ?? s.option})` : ""} · ${s.rainbow ? t("rainbowShort") : s.color} · ${t("brightness")} ${s.brightness}/${brightnessTop} · ${t("speed")} ${s.speed}/${LEVELS}`;
 /* A setting's value in words, for the log and the status table. */
 const FIELD_LABEL = { off: "fieldOff", mode: "effect", brightness: "brightness", speed: "speed", rainbow: "rainbowShort", color: "color", option: "direction" };
@@ -810,7 +842,7 @@ const pushNj81 = async () => {
       setConfirm(!diffs.length);
       if (!diffs.length) { logOk("areaLight", `${t("applied")}${retried ? ` (${t("afterRetry")})` : ""}: ${describeNj(settings)}${typing}`); }
       else { logWarn("areaLight", `${t("notApplied")} ${settings.off ? t("lightsOff") : modeLabel(settings.mode)}: ${describeDiffs(diffs, settings.mode)}`); }
-    } catch (error) { logError("areaLight", `${t("applyFailed")}: ${error.message}`); }
+    } catch (error) { logError("areaLight", `${t("applyFailed")}: ${why(error)}`); }
   }
   njBusy = false;
 };
@@ -892,6 +924,7 @@ const init = () => {
   window.addEventListener("blur", () => { for (const el of keyEls.values()) { el.classList.remove("down"); } });
   $("screen-fit").addEventListener("change", (event) => { drawScreen(); event.target.blur(); });
   $("gif-play").addEventListener("click", () => playGif(!gif?.playing));
+  $("screen-slot").addEventListener("change", () => { screenPixels = null; showLastPicture(); });
   $("gif-frame").addEventListener("input", (event) => { if (gif) { playGif(false); showGifFrame(Number(event.target.value)); } });
   buildGallery();
   $("hide-mode").addEventListener("click", () => { const mode = Number($("effect").value); if (mode !== OFF) { hideMode(mode); } });
@@ -921,6 +954,10 @@ const init = () => {
     button.style.background = swatch;
     button.addEventListener("click", () => { $("color").value = swatch; onFormChange({ target: $("color") }); scheduleLive(); });
     $("swatches").insertBefore(button, $("swatches").querySelector(".custom"));
+  }
+  // "Clear log" (Status and Log): empties both views of the log; the keyboard is not touched
+  for (const clear of document.querySelectorAll(".clear-log")) {
+    clear.addEventListener("click", () => { $("log").replaceChildren(); $("mini-log").replaceChildren(); });
   }
   for (const tab of document.querySelectorAll("[data-tab]")) { tab.addEventListener("click", () => showTab(tab.dataset.tab)); }
   $("mini-clock").addEventListener("click", () => { if (nj) { syncClock(); } });

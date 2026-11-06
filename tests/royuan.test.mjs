@@ -128,11 +128,13 @@ test("flash writes are spaced at least a second apart, reads are not", async () 
   assert.ok(clock - before < 200, "reads only settle");
 });
 
-test("off is brightness 0, and the menu follows the manufacturer's order", async () => {
+test("off: brightness 0 on gen2, the off switch alone on yc500; the menu follows the manufacturer's order", async () => {
   const { MODES, isOff } = await import("../public/js/royuan.js");
   assert.deepEqual(MODES.map((m) => m.mode), [4, 5, 6, 7, 8, 9, 10, 11, 19, 12, 14, 15, 16, 17, 18, 1, 2, 3]);
   assert.equal(isOff({ mode: 4, brightness: 0 }), true);
   assert.equal(isOff({ mode: 4, brightness: 2 }), false);
+  assert.equal(isOff({ mode: 4, brightness: 0, off: false }), false, "yc500: switched on with Fn + Backspace at brightness 0");
+  assert.equal(isOff({ mode: 4, brightness: 3, off: true }), true);
 });
 
 /* A fake NJ81-ED (device 873, yc500 command set): keymap on 0x89, FF on 0x8A, backlight-off in the options register. */
@@ -262,4 +264,21 @@ test("an NJ81-ED that is off lights up with the first write, before the new effe
   assert.deepEqual(diffs, []);
   const writes = state.sent.filter((p) => p[0] === 0x06 || p[0] === 0x07).map((p) => p[0]);
   assert.deepEqual(writes, [0x06, 0x07], "lights on first, then the effect");
+});
+
+test("a busy keyboard: HID transfers are retried before giving up", async () => {
+  const { HidSession } = await import("../public/js/hid.js");
+  const session = new HidSession();
+  let sends = 0;
+  let reads = 0;
+  session.device = {
+    async sendFeatureReport() { sends += 1; if (sends < 3) { throw new Error("Failed to write the feature report."); } },
+    async receiveFeatureReport() { reads += 1; if (reads < 2) { throw new Error("Failed to receive the feature report."); } return new DataView(new Uint8Array(64).fill(7).buffer); },
+  };
+  const transport = session.featureTransport(64, [0, 1, 1, 1]);
+  await transport.setFeature(new Uint8Array(64));
+  assert.equal(sends, 3);
+  assert.equal((await transport.getFeature())[0], 7);
+  session.device.sendFeatureReport = async () => { throw new Error("Failed to write the feature report."); };
+  await assert.rejects(() => transport.setFeature(new Uint8Array(64)), (error) => error.busy === true && error.attempts === 4);
 });

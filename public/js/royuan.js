@@ -264,9 +264,7 @@ export class Royuan {
      before a difference is believed. Returns { light, diffs } (diffs empty: the keyboard took everything). */
   async writeLight(settings) {
     const yc500 = Boolean(FAMILIES[this.family].options);
-    if (yc500 && settings.off) {   // both ways: brightness 0 and the backlight-off bit, so the lights go out whichever the firmware honours
-      await this.#serial(() => this.#write(encodeLight({ ...settings, brightness: 0 }, this.family)));
-      await this.sleep(150);
+    if (yc500 && settings.off) {   // the backlight-off bit only: the effect and its brightness stay as they are for when it comes back
       await this.#setLedOff(true);
     } else if (yc500 && (await this.get(FAMILIES[this.family].options.get, [0]))[2] & LED_OFF_BIT) {
       // the lights are off: switch them on FIRST, so they light up at once (with the stored effect), then the new effect
@@ -314,7 +312,9 @@ export class Royuan {
 }
 
 /* "Off" is shown when the keyboard reports brightness 0 (or effect 0). */
-export const isOff = (light) => light.off === true || light.brightness === 0 || light.mode === OFF;
+/* Off: on yc500 boards the backlight-off bit alone (brightness 0 is their dimmest level, and Fn + Backspace on the keyboard
+   flips only that bit); on gen2 boards, which have no such bit, brightness 0 or effect 0. */
+export const isOff = (light) => (typeof light.off === "boolean" ? light.off : light.brightness === 0 || light.mode === OFF);
 
 /* Which settings the keyboard did not keep: [{ field, sent, got }]. Fields an effect does not have are not compared. */
 export const lightDifferences = (sent, got) => {

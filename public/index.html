@@ -123,7 +123,7 @@
         </section>
 
         <section class="panel" aria-labelledby="h-status">
-          <h2 id="h-status" data-i18n="statusTitle"></h2>
+          <div class="panel-head"><h2 id="h-status" data-i18n="statusTitle"></h2><button type="button" class="small-btn clear-log" data-i18n="clearLog"></button></div>
           <div id="light-status" hidden>
             <table class="status">
               <thead><tr><th data-i18n="statusField"></th><th data-i18n="statusSent"></th><th data-i18n="statusKeyboard"></th></tr></thead>
@@ -160,20 +160,20 @@
           <label class="inline grow"><span data-i18n="gifFrame"></span> <input id="gif-frame" type="range" min="0" max="0" value="0"> <output id="gif-frame-out"></output></label>
           <p class="hint" data-i18n="gifNote"></p>
         </div>
-        <details id="gallery-box" class="gallery-box">
-          <summary data-i18n="gallery"></summary>
-          <div id="gallery" class="gallery"></div>
-          <p class="hint" data-i18n="galleryMore"></p>
-          <ul id="gallery-links" class="links"></ul>
-        </details>
-        <div id="screen-device" hidden>
+        <div id="screen-device" class="apply-box" hidden>
           <div class="row">
             <label id="screen-slot-box" class="inline"><span data-i18n="screenSlot"></span> <select id="screen-slot"></select></label>
             <button id="screen-send" type="button" class="primary" data-i18n="screenSend"></button>
           </div>
           <progress id="screen-progress" hidden value="0" max="1"></progress>
           <p id="screen-device-note" class="hint" data-i18n="screenDeviceNote"></p>
-          <p id="screen-size-note" class="hint" data-i18n="screenSizeUnknown" hidden></p>
+          <p id="screen-size-note" class="hint" data-i18n="screenSizeAssumed" hidden></p>
+        </div>
+        <div class="gallery-box">
+          <h3 data-i18n="gallery"></h3>
+          <div id="gallery" class="gallery"></div>
+          <p class="hint" data-i18n="galleryMore"></p>
+          <ul id="gallery-links" class="links"></ul>
         </div>
         <p id="screen-connect-note" class="hint" data-i18n="screenNote"></p>
       </section>
@@ -203,7 +203,7 @@
     <!-- Log -->
     <div id="tab-log" class="tab" hidden>
       <section class="panel" aria-labelledby="h-log">
-        <h2 id="h-log" data-i18n="log"></h2>
+        <div class="panel-head"><h2 id="h-log" data-i18n="log"></h2><button type="button" class="small-btn clear-log" data-i18n="clearLog"></button></div>
         <div id="log" class="log" aria-live="polite"></div>
       </section>
     </div>

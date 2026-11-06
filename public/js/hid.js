@@ -61,19 +61,26 @@ export class HidSession extends EventTarget {
   }
 
   /* Feature-report transport for the vendor protocol (64 bytes, report ID 0). Some platforms put the report ID in front of
-     the data they return: that byte is dropped so the caller always gets the 64 payload bytes. */
-  featureTransport(size = 64) {
+     the data they return: that byte is dropped so the caller always gets the 64 payload bytes.
+     The keyboard sometimes refuses a transfer while it is busy (writing flash, or another program has it open): each
+     transfer is tried up to 4 times, waiting longer each time, before the error is passed on. */
+  featureTransport(size = 64, waits = [0, 80, 250, 600]) {
+    const attempt = async (transfer) => {
+      let last;
+      for (const ms of waits) {
+        if (ms) { await new Promise((resolve) => setTimeout(resolve, ms)); }
+        if (!this.device) { throw new Error("No keyboard connected"); }
+        try { return await transfer(this.device); } catch (error) { last = error; }
+      }
+      throw Object.assign(new Error(last?.message || "HID transfer failed"), { busy: true, attempts: waits.length });
+    };
     return {
-      setFeature: async (bytes) => {
-        if (!this.device) { throw new Error("No keyboard connected"); }
-        await this.device.sendFeatureReport(0, bytes);
-      },
-      getFeature: async () => {
-        if (!this.device) { throw new Error("No keyboard connected"); }
-        const view = await this.device.receiveFeatureReport(0);
+      setFeature: (bytes) => attempt((device) => device.sendFeatureReport(0, bytes)),
+      getFeature: () => attempt(async (device) => {
+        const view = await device.receiveFeatureReport(0);
         const data = new Uint8Array(view.buffer, view.byteOffset, view.byteLength);
         return Uint8Array.from(data.length > size ? data.subarray(data.length - size) : data);
-      },
+      }),
     };
   }
 }
