@@ -5,6 +5,7 @@ import { HidSession, hex4, hidSupported } from "./hid.js";
 import { ANIMATION, LEVELS, MODES, OFF, PRESET_COLOURS, ROYUAN, Royuan, TFT, isOff, isWritable, modeInfo, pictureBytes } from "./royuan.js";
 import { hexToRgb, rgbToHex } from "./util.js";
 import { GALLERY, LINKS } from "./gallery.js";
+import { initKeys } from "./keys-ui.js";
 import { REACTIVE_DEFAULT, nj81KeyColor } from "./lighting-nj81.js";
 import { currentLanguage, languages, setLanguage, t } from "./i18n.js";
 
@@ -236,7 +237,8 @@ const buildKeyboard = () => {
   box.replaceChildren(surface);
 };
 
-const onKeyClick = (key) => notePress(key);   // a click counts as a key press for the effects that react to typing
+let keys = null;   // the Keys tab (keys-ui.js)
+const onKeyClick = (key) => { if (keys?.select(key)) { return; } notePress(key); };   // on the Keys tab a click picks the key; elsewhere it is a key press for the effects
 
 /* Recent key presses (real keyboard or clicks), for the effects that react to typing. */
 const presses = [];
@@ -650,13 +652,14 @@ const download = (name, data, type) => {
    show the "connect to start" card; the log is always there. */
 let ready = false;
 const TAB_KEY = "nj81-config.tab";
-let currentTab = (() => { try { const saved = localStorage.getItem(TAB_KEY); return ["light", "screen", "profile", "log"].includes(saved) ? saved : "light"; } catch (error) { return "light"; } })();
-const TAB_SUB = { light: "subLight", screen: "subScreen", profile: "subProfile", log: "subLog" };
-const TAB_TITLE = { light: "lighting", screen: "screen", profile: "profile", log: "log" };
+let currentTab = (() => { try { const saved = localStorage.getItem(TAB_KEY); return ["light", "keys", "screen", "profile", "log"].includes(saved) ? saved : "light"; } catch (error) { return "light"; } })();
+const TAB_SUB = { light: "subLight", keys: "subKeys", screen: "subScreen", profile: "subProfile", log: "subLog" };
+const TAB_TITLE = { light: "lighting", keys: "keysTab", screen: "screen", profile: "profile", log: "log" };
 const showTab = (tab) => {
   currentTab = tab;
   try { localStorage.setItem(TAB_KEY, tab); } catch (error) { /* private mode */ }
-  $("keyboard-panel").hidden = !ready || !["light", "screen"].includes(tab);
+  queueMicrotask(() => { if (tab === "keys" && ready) { keys?.onShow(); } else { keys?.onHide(); } });
+  $("keyboard-panel").hidden = !ready || !["light", "keys", "screen"].includes(tab);
   for (const button of document.querySelectorAll("[data-tab]")) {
     if (button.dataset.tab === tab) { button.setAttribute("aria-current", "page"); } else { button.removeAttribute("aria-current"); }
   }
@@ -914,6 +917,7 @@ const setLearning = (on) => {
 };
 
 const dropKeyboard = () => {
+  keys?.onDisconnect();
   const had = nj !== null;
   nj = null;
   clearTimeout(watchTimer);
@@ -1131,6 +1135,7 @@ const init = () => {
   $("screen-slot").addEventListener("change", () => { screenPixels = null; showLastPicture(); });
   $("gif-frame").addEventListener("input", (event) => { if (gif) { playGif(false); showGifFrame(Number(event.target.value)); } });
   buildGallery();
+  keys = initKeys({ $, t, log, logOk, logWarn, logError, why, getNj: () => nj, keyEls, KEYS });
   restoreChosen();   // the picture this browser chose last time
   $("learn-start").addEventListener("click", () => setLearning(true));
   $("reactive").addEventListener("change", (event) => {

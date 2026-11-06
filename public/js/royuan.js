@@ -488,6 +488,67 @@ export class Royuan {
     return { light, diffs, sentAt, superseded: false };
   }
 
+  /* ---------- keys, Fn layer and macros (yc500 / NJ81-ED; see keymap.js for the 4-byte actions) ----------
+     As the official driver: the key matrix is read 16 keys a page ([0x89, profile, page] x 8, 128 keys), the Fn layer the
+     same way with 0x90; one key is written with [0x13, profile, position, ..., action] (0x15 for the Fn layer); a macro is
+     read with [0x88, index] + 4 replies and written in 56-byte pages [0x16, index, page, 56, last?] + data. Every write
+     goes through the flash gap. Checked on a real NJ81-ED (a remap with 0x13, read back with 0x89). */
+  #keysOnly() { if (this.family !== "yc500") { throw new RoyuanError("Key settings are only set up for the NJ81-ED (yc500)"); } }
+
+  #pagedRead(op, first, pages) {
+    return this.#serial(async () => {
+      const out = new Uint8Array(pages * ROYUAN.SIZE);
+      for (let page = 0; page < pages; page += 1) {
+        await this.#send(packet(op, [first, page]));
+        await this.sleep(this.timing.settleMs * 2);
+        out.set((await this.transport.getFeature()).subarray(0, ROYUAN.SIZE), page * ROYUAN.SIZE);
+      }
+      return out;
+    });
+  }
+  /* 128 actions of 4 bytes, by key position. */
+  async readKeymap(profile) { this.#keysOnly(); const raw = await this.#pagedRead(0x89, profile, 8); return Array.from({ length: 128 }, (_, i) => [...raw.subarray(i * 4, i * 4 + 4)]); }
+  async readFnLayer(layer = 0) { this.#keysOnly(); const raw = await this.#pagedRead(0x90, layer, 8); return Array.from({ length: 128 }, (_, i) => [...raw.subarray(i * 4, i * 4 + 4)]); }
+
+  #keyPacket(op, first, position, action) {
+    if (!Number.isInteger(position) || position < 0 || position > 127) { throw new RoyuanError("Bad key position"); }
+    if (!Array.isArray(action) || action.length !== 4) { throw new RoyuanError("A key action is 4 bytes"); }
+    const data = packet(op, [first, position]);
+    data.set(action, 8);
+    return data;
+  }
+  setKey(profile, position, action) { this.#keysOnly(); return this.#serial(() => this.#write(this.#keyPacket(0x13, profile, position, action))); }
+  setFnKey(layer, position, action) { this.#keysOnly(); return this.#serial(() => this.#write(this.#keyPacket(0x15, layer, position, action))); }
+
+  readMacro(index) {
+    this.#keysOnly();
+    return this.#serial(async () => {
+      await this.#send(packet(0x88, [index]));
+      const out = new Uint8Array(4 * ROYUAN.SIZE);
+      for (let page = 0; page < 4; page += 1) {
+        await this.sleep(this.timing.settleMs);
+        out.set((await this.transport.getFeature()).subarray(0, ROYUAN.SIZE), page * ROYUAN.SIZE);
+      }
+      return out;
+    });
+  }
+  /* bytes: the 256-byte macro from keymap.encodeMacro. Only the 56-byte pages that hold something are sent. */
+  writeMacro(index, bytes) {
+    this.#keysOnly();
+    const pages = [];
+    for (let page = 0; page * 56 < bytes.length && page < 5; page += 1) {
+      const chunk = bytes.subarray(page * 56, page * 56 + 56);
+      if (chunk.some((v) => v !== 0)) { pages.push(chunk); }
+    }
+    return this.#serial(async () => {
+      for (let page = 0; page < pages.length; page += 1) {
+        const data = packet(0x16, [index, page, 56, page === pages.length - 1 ? 1 : 0]);
+        data.set(pages[page], 8);
+        await this.#write(data);
+      }
+    });
+  }
+
   /* `date` can be a function: it is then read at the moment the packet goes out, after any wait. */
   setClock(date = () => new Date()) {
     return this.#serial(() => this.#write(() => clockPacket(typeof date === "function" ? date() : date)));

@@ -32,6 +32,7 @@
 
     <nav class="nav" aria-label="Menu">
       <button type="button" data-tab="light" data-i18n="lighting"></button>
+      <button type="button" data-tab="keys" data-i18n="keysTab"></button>
       <button type="button" data-tab="screen" data-i18n="screen"></button>
       <button type="button" data-tab="profile" data-i18n="profile"></button>
       <button type="button" data-tab="log" data-i18n="log"></button>
@@ -135,6 +136,68 @@
             <p class="hint"><span data-i18n="effectsTried"></span>: <span id="effect-report">-</span></p>
           </div>
           <div id="mini-log" class="mini-log" aria-live="polite"></div>
+        </section>
+      </div>
+    </div>
+
+    <!-- Keys: remap, Fn shortcuts, macros -->
+    <div id="tab-keys" class="tab needs-keyboard" hidden>
+      <p id="keys-unsupported" class="notice" data-i18n="keysUnsupported" hidden></p>
+      <div class="cols">
+        <section class="panel" aria-labelledby="h-keymap">
+          <div class="panel-head">
+            <h2 id="h-keymap" data-i18n="keysRemap"></h2>
+            <button id="keys-reload" type="button" class="small-btn" data-i18n="keysReload"></button>
+          </div>
+          <div class="chips" role="group" aria-label="Layer">
+            <button type="button" data-layer="normal" aria-pressed="true" data-i18n="layerNormal"></button>
+            <button type="button" data-layer="fn" aria-pressed="false" data-i18n="layerFn"></button>
+          </div>
+          <p id="keys-state" class="hint"></p>
+          <p id="key-pick-hint" class="hint" data-i18n="keysPickHint"></p>
+          <div id="key-editor" class="key-editor" hidden>
+            <div class="key-head"><strong id="key-name"></strong><span id="key-current" class="hint"></span></div>
+            <p id="key-fn-note" class="notice" data-i18n="keysFnNote" hidden></p>
+            <label class="field"><span class="label" data-i18n="keysAction"></span>
+              <select id="key-type">
+                <option value="key" data-i18n="actKey"></option><option value="media" data-i18n="actMedia"></option>
+                <option value="macro" data-i18n="actMacro"></option><option value="disabled" data-i18n="actDisabled"></option>
+              </select>
+            </label>
+            <div id="key-key-box" class="key-grid">
+              <select id="key-modifier" aria-label="Modifier">
+                <option value="0" data-i18n="modNone"></option><option value="224">Ctrl +</option><option value="225">Shift +</option>
+                <option value="226">Alt +</option><option value="227">Win +</option>
+              </select>
+              <select id="key-target" aria-label="Key"></select>
+              <button id="key-capture" type="button" data-i18n="keysCapture"></button>
+            </div>
+            <div id="key-media-box" hidden><select id="key-media" aria-label="Media key"></select></div>
+            <div id="key-macro-box" class="key-grid" hidden>
+              <select id="key-macro-slot" aria-label="Macro"></select>
+              <select id="key-macro-mode" aria-label="Macro mode"></select>
+            </div>
+            <div class="key-grid">
+              <button id="key-apply" type="button" class="primary" data-i18n="keysApply"></button>
+              <button id="key-reset" type="button" data-i18n="keysResetOne"></button>
+            </div>
+          </div>
+          <div class="tools"><button id="keys-reset-all" type="button" data-i18n="keysResetAll"></button></div>
+        </section>
+        <section class="panel" aria-labelledby="h-macro">
+          <h2 id="h-macro" data-i18n="macros"></h2>
+          <p class="hint" data-i18n="macroHelp"></p>
+          <div class="key-grid">
+            <select id="macro-slot" aria-label="Macro slot"></select>
+            <button id="macro-load" type="button" data-i18n="macroLoad"></button>
+          </div>
+          <div class="key-grid">
+            <button id="macro-record" type="button" data-i18n="macroRecord"></button>
+            <button id="macro-clear" type="button" data-i18n="macroClear"></button>
+          </div>
+          <div id="macro-events" class="macro-events"></div>
+          <label class="field"><span class="label" data-i18n="macroRepeat"></span><input id="macro-repeat" type="number" min="1" max="65535" value="1"></label>
+          <button id="macro-save" type="button" class="primary" data-i18n="macroSave"></button>
         </section>
       </div>
     </div>
