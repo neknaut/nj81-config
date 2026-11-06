@@ -261,7 +261,13 @@ export class Royuan {
   /* `settings.off`: gen2 turns the lights off as the effect at brightness 0, yc500 with its options bit. */
   async writeLight(settings) {
     const yc500 = Boolean(FAMILIES[this.family].options);
-    if (yc500 && settings.off) { await this.#setLedOff(true); return { kept: (await this.readLight()).off === true, light: await this.readLight() }; }
+    if (yc500 && settings.off) {   // both ways: brightness 0 and the backlight-off bit, so the lights go out whichever the firmware honours
+      await this.#serial(() => this.#write(encodeLight({ ...settings, brightness: 0 }, this.family)));
+      await this.sleep(150);
+      await this.#setLedOff(true);
+      const light = await this.readLight();
+      return { kept: light.off === true, light };
+    }
     const data = encodeLight(yc500 || !settings.off ? settings : { ...settings, brightness: 0 }, this.family);
     await this.#serial(() => this.#write(data));
     await this.sleep(150);

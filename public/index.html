@@ -47,15 +47,15 @@
           <span data-i18n="direction"></span>
           <select id="light-option"></select>
         </label>
-        <label>
+        <label id="color-box">
           <span data-i18n="color"></span>
           <input id="color" type="color" value="#ff7a66">
         </label>
-        <label>
+        <label id="brightness-box">
           <span><span data-i18n="brightness"></span>: <output id="brightness-out">80</output>%</span>
           <input id="brightness" type="range" min="0" max="100" value="80">
         </label>
-        <label>
+        <label id="speed-box">
           <span><span data-i18n="speed"></span>: <output id="speed-out">50</output>%</span>
           <input id="speed" type="range" min="0" max="100" value="50">
         </label>
@@ -64,6 +64,10 @@
         <select id="caps"><option value="white" data-i18n="capsWhite"></option><option value="black" data-i18n="capsBlack"></option></select>
       </label>
       <label id="rainbow-box" class="check" hidden><input id="rainbow" type="checkbox"> <span data-i18n="rainbow"></span></label>
+      <div id="mode-tools" class="row" hidden>
+        <button id="hide-mode" type="button" data-i18n="hideMode"></button>
+        <button id="show-modes" type="button" data-i18n="showModes" hidden></button>
+      </div>
       <p class="muted small" data-i18n="typeHint"></p>
       <div id="keyboard" class="keyboard" role="group" aria-label="Keyboard preview"></div>
       <div class="row">
@@ -76,22 +80,14 @@
 
     <section class="card" aria-labelledby="h-screen">
       <h2 id="h-screen" data-i18n="screen"></h2>
-      <div class="controls one">
-        <label>
-          <span data-i18n="screenSize"></span>
-          <span class="inline">
-            <input id="screen-w" type="number" min="8" max="512" value="160" aria-label="width">
-            <span>×</span>
-            <input id="screen-h" type="number" min="8" max="512" value="80" aria-label="height">
-          </span>
-        </label>
-        <label>
-          <span data-i18n="screenImage"></span>
-          <input id="screen-file" type="file" accept="image/*">
+      <div class="row">
+        <label class="file-button"><span data-i18n="screenPick"></span><input id="screen-file" type="file" accept="image/*"></label>
+        <label class="inline"><span data-i18n="screenFit"></span>
+          <select id="screen-fit"><option value="cover" data-i18n="fitCover"></option><option value="contain" data-i18n="fitContain"></option></select>
         </label>
       </div>
-      <canvas id="screen-canvas" class="screen" width="160" height="80"></canvas>
-      <div class="row"><button id="screen-export" type="button" data-i18n="exportRgb565"></button></div>
+      <canvas id="screen-canvas" class="screen" width="160" height="80" aria-label="Screen preview"></canvas>
+      <p id="screen-name" class="muted small"></p>
       <div id="screen-device" hidden>
         <div class="row">
           <label id="screen-slot-box" class="inline"><span data-i18n="screenSlot"></span> <select id="screen-slot"></select></label>
@@ -99,10 +95,10 @@
           <button id="screen-clock" type="button" data-i18n="screenClock"></button>
         </div>
         <progress id="screen-progress" hidden value="0" max="1"></progress>
-        <p class="muted small" data-i18n="screenDeviceNote"></p>
+        <p id="screen-device-note" class="muted small" data-i18n="screenDeviceNote"></p>
         <p id="screen-size-note" class="muted small" data-i18n="screenSizeUnknown" hidden></p>
       </div>
-      <p class="muted small" data-i18n="screenNote"></p>
+      <p id="screen-connect-note" class="muted small" data-i18n="screenNote"></p>
     </section>
 
     <section class="card" aria-labelledby="h-profile">
