@@ -24,7 +24,7 @@ const fakeNj81 = ({ deviceId = 2454 } = {}) => {
   };
   return { transport, state };
 };
-const fast = { sleep: async () => {}, gapMs: 0 };
+const fast = { sleep: async () => {}, timing: { writeGapMs: 0, settleMs: 0, pageGapMs: 0, readyGapMs: 0 } };
 
 test("packets carry the documented checksum", () => {
   assert.ok(checksumOk(packet(OP.IDENTIFY), 7));
@@ -62,7 +62,7 @@ test("writing lighting is read back", async () => {
   const { transport } = fakeNj81();
   const nj = new Royuan(transport, fast);
   const back = await nj.writeLight({ mode: 12, speed: 1, brightness: 4, option: 1, color: "#00ff00" });
-  assert.deepEqual(back, { mode: 12, speed: 1, brightness: 4, option: 1, rainbow: false, color: "#00ff00" });
+  assert.deepEqual(back, { kept: true, light: { mode: 12, speed: 1, brightness: 4, option: 1, rainbow: false, color: "#00ff00" } });
 });
 
 test("pictures are column-major big-endian RGB565, announced then sent in 56-byte pages", async () => {
@@ -110,4 +110,27 @@ test("the NJ81 drawing has 80 keys, Home under PgDn and the screen top right", a
   assert.equal(home.x + home.w, LAYOUT_WIDTH);
   assert.ok(KEYS.filter((key) => key.y === 0).every((key) => key.x + key.w <= SCREEN_TILE.x));
   assert.equal(SCREEN_TILE.x + SCREEN_TILE.w, LAYOUT_WIDTH);
+});
+
+test("flash writes are spaced at least a second apart, reads are not", async () => {
+  const { transport, state } = fakeNj81();
+  let clock = 0;
+  const waits = [];
+  const nj = new Royuan(transport, { now: () => clock, sleep: async (ms) => { waits.push(ms); clock += ms; } });
+  await nj.writeLight({ mode: 1, speed: 0, brightness: 4, color: "#ff0000" });
+  const t0 = clock;
+  await nj.setClock(new Date(2026, 10, 6, 15, 4, 5));
+  assert.ok(clock - t0 >= 1000 - 200, "clock waited for the light write");
+  const sentAt = state.sent.findIndex((p) => p[0] === OP.CLOCK);
+  assert.deepEqual([...state.sent[sentAt].subarray(8, 15)], [7, 234, 11, 6, 15, 4, 5]);
+  const before = clock;
+  await nj.readLight();
+  assert.ok(clock - before < 200, "reads only settle");
+});
+
+test("off is brightness 0, and the menu follows the manufacturer's order", async () => {
+  const { MODES, isOff } = await import("../public/js/royuan.js");
+  assert.deepEqual(MODES.map((m) => m.mode), [4, 5, 6, 7, 8, 9, 10, 11, 19, 12, 14, 15, 16, 17, 18, 1, 2, 3]);
+  assert.equal(isOff({ mode: 4, brightness: 0 }), true);
+  assert.equal(isOff({ mode: 4, brightness: 2 }), false);
 });

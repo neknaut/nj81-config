@@ -33,7 +33,7 @@ export const validateProfile = (input) => {
   const viaEffect = Number.isInteger(lighting.viaEffect) && lighting.viaEffect >= 0 && lighting.viaEffect <= 255 ? lighting.viaEffect : undefined;
   const nj = lighting.nj81 && typeof lighting.nj81 === "object" ? lighting.nj81 : null;
   const nj81 = nj && Number.isInteger(nj.mode) && nj.mode >= 1 && nj.mode <= 31
-    ? { mode: nj.mode, option: Number.isInteger(nj.option) && nj.option >= 0 && nj.option <= 3 ? nj.option : 0, rainbow: nj.rainbow === true }
+    ? { mode: nj.mode, option: Number.isInteger(nj.option) && nj.option >= 0 && nj.option <= 3 ? nj.option : 0, rainbow: nj.rainbow === true, off: nj.off === true }
     : undefined;
   const screen = input.screen && typeof input.screen === "object" ? input.screen : {};
   const profile = {
