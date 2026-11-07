@@ -501,7 +501,12 @@ export const initShare = (ctx) => {
 
   /* ---------- wiring ---------- */
   const cancelAll = () => { cancelPictures(); cancelScan(); };
-  const show = (view) => {
+  /* The way to the Keydous servers is found once, the first time the Library opens. */
+  let apiFound = null;
+  const show = async (view) => {
+    if (!apiFound) { apiFound = findApi(); }
+    await apiFound;
+    if (!reachable()) { showBlocked(); }
     if (!reachable()) {   // only the notice: nothing to read
       for (const b of document.querySelectorAll("[data-share-view]")) { b.setAttribute("aria-pressed", String(b.dataset.shareView === view)); }
       $("share-images-box").hidden = view !== "images";
