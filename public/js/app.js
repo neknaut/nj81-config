@@ -305,6 +305,8 @@ const drawScreen = () => {
     context.imageSmoothingEnabled = true;
     context.imageSmoothingQuality = "high";
     context.drawImage(screenPixels, Math.round((width - w) / 2 + screenShift.x), Math.round((height - h) / 2 + screenShift.y), w, h);
+  } else if (sentPicture) {
+    context.drawImage(sentPicture, 0, 0, width, height);   // nothing chosen: the picture sent last in this visit
   } else {
     GALLERY[0].draw(context, width, height);   // the default picture: "Nek NauT", white on black
   }
@@ -448,6 +450,26 @@ const stopGif = () => {
 /* "Picture layer" 1-5: shown for a still picture on a board with layers, never for a GIF (as the driver on the NJ81-ED). */
 const syncLayerBox = () => { $("screen-slot-box").hidden = !(nj?.model?.screen?.slots > 1) || Boolean(gif); };
 
+/* The picture sent last in this visit (its first frame), shown on the keyboard drawing while nothing is chosen. */
+let sentPicture = null;
+const keepSentPicture = () => {
+  const copy = document.createElement("canvas");
+  copy.width = $("screen-canvas").width;
+  copy.height = $("screen-canvas").height;
+  copy.getContext("2d").drawImage($("screen-canvas"), 0, 0);
+  sentPicture = copy;
+};
+/* Back to "Choose a picture": after a picture is sent, and on leaving the Screen tab with one not sent. */
+const clearScreenPick = () => {
+  if (!screenPixels) { return; }
+  stopGif();
+  screenFile = null;
+  screenPixels = null;
+  screenShift = { x: 0, y: 0 };
+  markPending(false);
+  drawScreen();
+  if (nj) { showLastPicture(); } else { $("screen-name").textContent = ""; }
+};
 const setScreenSource = (source, name) => {
   screenPixels = source;
   screenShift = { x: 0, y: 0 };
@@ -618,6 +640,7 @@ const clearScreenNow = async (report) => {
     forgetFiles(8);
     screenFile = null;
     screenPixels = null;
+    sentPicture = null;   // the keyboard holds no picture now
     screenShift = { x: 0, y: 0 };
     markPending(false);
     $("screen-name").textContent = t("noPictureSent");
@@ -756,7 +779,14 @@ const withProgress = async ({ title, text, done, run }) => {
   }
   return ok;
 };
-const applyWithModal = (name) => withProgress({ title: t("applyingPicture"), text: name, done: t("pictureApplied"), run: (report) => sendPicture({ report }) });
+const applyWithModal = (name) => withProgress({
+  title: t("applyingPicture"), text: name, done: t("pictureApplied"),
+  run: async (report) => {
+    const sent = await sendPicture({ report });
+    if (sent) { keepSentPicture(); clearScreenPick(); }   // sent: the preview is ready for the next picture
+    return sent;
+  },
+});
 
 /* A text box keeps its keys; everywhere else the page swallows them while you try the keyboard. */
 const isTyping = (el) => Boolean(el) && (el.isContentEditable || el.tagName === "TEXTAREA"
@@ -801,6 +831,7 @@ const showGuide = () => {
   renderGuide($("guide-body"), guideLanguage);
 };
 const showTab = (tab) => {
+  if (currentTab === "screen" && tab !== "screen" && !screenSending) { clearScreenPick(); }   // a picture not sent is dropped on leaving
   currentTab = tab;
   try { sessionStorage.setItem(TAB_KEY, tab); } catch (error) { /* private mode */ }
   showGuide();

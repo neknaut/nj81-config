@@ -43,7 +43,7 @@ const VI = [
     "Lỡ để macro chạy mãi không dừng: bấm lại phím đó, hoặc rút cáp.",
   ]],
   ["Màn hình", [
-    "Chọn ảnh ngay trong khung xem trước: bấm vào khung (khi chưa có ảnh, khung ghi «Chọn ảnh») hoặc thả file ảnh / GIF vào đó. Cũng có thể bấm một ảnh trong «Thư viện ảnh cho màn hình» hay lấy từ tab Library. Khung xem trước có đúng tỉ lệ màn hình NJ81 (160×80) và vẽ nét ở mọi cỡ. Mỗi lần mở trang, khung bắt đầu trống: web không giữ ảnh đã chọn từ lần trước.",
+    "Chọn ảnh ngay trong khung xem trước: bấm vào khung (khi chưa có ảnh, khung ghi «Chọn ảnh») hoặc thả file ảnh / GIF vào đó. Cũng có thể bấm một ảnh trong «Thư viện ảnh cho màn hình» hay lấy từ tab Library. Khung xem trước có đúng tỉ lệ màn hình NJ81 (160×80) và vẽ nét ở mọi cỡ. Khung trở về «Chọn ảnh» khi mở trang, sau khi áp dụng xong, và khi rời tab Màn hình mà chưa áp dụng; hình bàn phím vẫn hiện ảnh vừa gửi.",
     "«Cách đặt ảnh vào màn hình»: lấp đầy (cắt bớt) hoặc vừa khít (có viền đen).",
     "Ảnh khác tỉ lệ 2:1: kéo ảnh trong khung để chỉnh vị trí lên / xuống / trái / phải, hoặc bấm vào khung rồi dùng phím mũi tên (Shift + mũi tên: 10 điểm ảnh một lần). «Căn giữa» đưa ảnh về giữa. Bấm (không kéo) vào khung để đổi ảnh khác.",
     "GIF: dùng thanh khung hình để xem từng khung, nút Phát / Dừng để xem chuyển động. Tối đa 50 khung; GIF chạy đúng tốc độ của nó.",
@@ -128,7 +128,7 @@ const EN = [
     "A macro that will not stop: press that key again, or unplug the cable.",
   ]],
   ["Screen", [
-    "Choose a picture in the preview itself: click it (with no picture yet it says «Choose a picture») or drop a picture / GIF file on it. A picture from the «Picture library for the screen» or the Library tab works too. The preview has the NJ81 screen's shape (160×80) and is drawn sharp at any size. Each visit starts with an empty preview: the page does not keep the picture chosen last time.",
+    "Choose a picture in the preview itself: click it (with no picture yet it says «Choose a picture») or drop a picture / GIF file on it. A picture from the «Picture library for the screen» or the Library tab works too. The preview has the NJ81 screen's shape (160×80) and is drawn sharp at any size. The preview goes back to «Choose a picture» when the page opens, once a picture is applied, and on leaving the Screen tab without applying; the keyboard drawing keeps showing the picture just sent.",
     "«How the picture fits the screen»: fill the screen (cropped) or fit inside it (black bars).",
     "A picture of another shape than 2:1: drag it in the preview to move it up / down / left / right, or click the preview and use the arrow keys (Shift + arrow: 10 pixels at a time). «Centre» puts it back in the middle. A click (no drag) on the preview picks another picture.",
     "GIFs: the frame bar steps through frames and Play / Pause shows the motion. Up to 50 frames, played at the GIF's own speed.",
