@@ -9,7 +9,7 @@
 import { KEYS, LAYOUT_HEIGHT, LAYOUT_WIDTH } from "./layout.js";
 import { REACTIVE_DEFAULT, nj81KeyColor } from "./lighting-nj81.js";
 import { HID_KEYS } from "./keymap.js";
-import { drawSharp, keepSharp, stopSharp } from "./sharp.js";
+import { drawSharp, isShown, keepSharp, stopSharp } from "./sharp.js";
 
 /* Where the Library's three calls go. Through the app's own server (server.mjs, /keydous/*) when it is there: that works
    on any address, deployed or local. Straight to the Keydous servers only at http://localhost:8080 with no such server
@@ -202,7 +202,7 @@ const post = async (url, body, signal) => {
 const inflate = async (buffer) => new Response(new Blob([buffer]).stream().pipeThrough(new DecompressionStream("deflate-raw"))).blob();
 
 export const initShare = (ctx) => {
-  const { $, t, logOk, logWarn, logError, why, getNj, usePicture, applyLight, applyKeys, describeLight, describeKey } = ctx;
+  const { $, t, logOk, why, usePicture, applyLight, applyKeys, describeLight, describeKey } = ctx;
   let waiting = 0;   // API calls on the way: the panel shows a loading in its middle
   const wait = async (work) => { waiting += 1; $("share-loading").hidden = false; try { return await work(); } finally { waiting -= 1; $("share-loading").hidden = waiting > 0 ? false : true; } };
   /* Which list and page is on show is kept, so F5 comes back to it (and loads only that page). */
@@ -212,7 +212,7 @@ export const initShare = (ctx) => {
   const saved = (() => { try { return JSON.parse(sessionStorage.getItem(VIEW_KEY) || "{}"); } catch (error) { return {}; } })();
   const state = {
     view: saved.view === "configs" ? "configs" : "images", imgOrder: saved.imgOrder === "top" ? "top" : "new", imgPage: Math.max(1, saved.imgPage | 0 || 1), imgPages: 1,
-    cfgOrder: saved.cfgOrder === "count" ? "count" : "time", cfgPage: Math.max(1, saved.cfgPage | 0 || 1), configs: null, scanning: false, urls: [],
+    cfgOrder: saved.cfgOrder === "count" ? "count" : "time", cfgPage: Math.max(1, saved.cfgPage | 0 || 1), configs: null, scanning: false,
     shown: "",   // the pictures page on show ("order:page")
     onShow: new Set(),   // the md5 of the pictures on show (their files are kept)
   };
@@ -230,10 +230,11 @@ export const initShare = (ctx) => {
   markOrder("share-cfg-order", state.cfgOrder);
 
   /* ---------- pictures / GIFs ---------- */
-  /* Files by md5 (the same picture is not fetched twice, e.g. in both orders), as blob URLs, decoded ahead so a page shows
-     in one go. At most FILES kept; the oldest go first, never one of the page on show. */
+  /* Files by md5 (the same picture is not fetched twice, e.g. in both orders): a blob URL (for "Use this picture"), the
+     first frame decoded and a GIF's bytes (to play it). At most FILES kept; the oldest go first, never one of the page on
+     show. */
   const FILES = 120;
-  const files = new Map();   // md5 -> { url, type }
+  const files = new Map();   // md5 -> { url, type, first, data }
   const typeOf = (image) => (image.screen_type === "GIF" ? "image/gif" : "image/png");
   const fileOf = async (image, signal) => {
     const kept = files.get(image.md5);
@@ -304,11 +305,9 @@ export const initShare = (ctx) => {
     pages.set(key, entry);
     return entry.promise;
   };
-  let readAhead = 0;   // bumped to stop the reading ahead
   /* Cancels the reads on their way (all of them, or all but `keep`): the list or files of a page left before they came.
      Drops pages far from the one on show. */
   const cancelPictures = (keep = null) => {
-    readAhead += 1;
     for (const [key, entry] of pages) {
       if (key === keep) { continue; }
       const [order, page] = key.split(":");
@@ -334,7 +333,6 @@ export const initShare = (ctx) => {
     if (!box.querySelector(".skeleton")) { box.replaceChildren(...skeletons()); }
     box.setAttribute("aria-busy", "true");
   };
-  const readNext = () => {};   // no reading ahead: a page is read when it is asked for
   const loadImages = async () => {
     if (!reachable()) { return; }
     const box = $("share-images");
@@ -355,7 +353,6 @@ export const initShare = (ctx) => {
       state.shown = key;
       const bar = $("share-images-box").querySelector(".share-bar");
       if (bar && bar.getBoundingClientRect().top < 0) { bar.scrollIntoView({ block: "start", behavior: "smooth" }); }   // back to the top of the list
-      readNext();
     } catch (error) {
       if (aborted(error)) { return; }
       $("share-img-state").textContent = `${t("shareFailed")}: ${why(error)}`;
@@ -387,8 +384,8 @@ export const initShare = (ctx) => {
         if (count < 2) { return; }
         let index = 0;
         while (view.isConnected) {
-          const seen = !document.hidden && view.getBoundingClientRect().width > 0;
-          if (!seen) { await new Promise((wake) => { setTimeout(wake, 400); }); continue; }
+          // off screen, scrolled out of view or the browser tab behind: not played
+          if (!isShown(view)) { await new Promise((wake) => { setTimeout(wake, 400); }); continue; }
           index = (index + 1) % count;
           const { image } = await decoder.decode({ frameIndex: index });
           const ms = Math.max(20, (image.duration ?? 100000) / 1000);
@@ -603,24 +600,21 @@ export const initShare = (ctx) => {
   const cancelAll = () => { cancelPictures(); cancelScan(); };
   /* The way to the Keydous servers is found once, the first time the Library opens. */
   let apiFound = null;
+  const markView = (view) => {
+    for (const b of document.querySelectorAll("[data-share-view]")) { b.setAttribute("aria-pressed", String(b.dataset.shareView === view)); }
+    $("share-images-box").hidden = view !== "images";
+    $("share-configs-box").hidden = view !== "configs";
+  };
   const show = async (view) => {
     if (!apiFound) { apiFound = findApi(); }
     if (view === "images" && !$("share-images").children.length) { showSkeletons(); }   // the panel at its full size at once
     await apiFound;
-    if (!reachable()) { showBlocked(); }
-    if (!reachable()) {   // only the notice: nothing to read
-      for (const b of document.querySelectorAll("[data-share-view]")) { b.setAttribute("aria-pressed", String(b.dataset.shareView === view)); }
-      $("share-images-box").hidden = view !== "images";
-      $("share-configs-box").hidden = view !== "configs";
-      return;
-    }
+    if (!reachable()) { showBlocked(); markView(view); return; }   // only the notice: nothing to read
     if (view === "images") { cancelScan(); } else { cancelPictures(); }   // the other list's reads stop
     state.view = view;
     remember();
-    for (const b of document.querySelectorAll("[data-share-view]")) { b.setAttribute("aria-pressed", String(b.dataset.shareView === view)); }
-    $("share-images-box").hidden = view !== "images";
-    $("share-configs-box").hidden = view !== "configs";
-    if (view === "images") { if (state.shown !== keyOf(state.imgOrder, state.imgPage)) { loadImages(); } else { readNext(); } }
+    markView(view);
+    if (view === "images" && state.shown !== keyOf(state.imgOrder, state.imgPage)) { loadImages(); }
     if (view === "configs") {
       if (!state.configs) { state.configs = readCache()?.configs ?? null; renderConfigs(); }
       if (!state.scanning && (readCache()?.resume || !readCache())) { scan(); }   // a read that was cancelled goes on
@@ -665,10 +659,6 @@ export const initShare = (ctx) => {
 
   $("share-cfg-refresh").addEventListener("click", () => scan());
 
-  /* At start (the full-screen loading waits for it): the first page of pictures, and the NJ81-ED settings (kept ones at
-     once, then the list read down to them; the first time the whole list). progress(text) tells how far it is. */
-  /* At start the full-screen loading waits only for the page on show: the pictures of that page, or the NJ81-ED
-     settings kept from before (the first time: until the first one is found; the rest of the list is read behind). */
   /* No way to the Keydous servers (no server of ours, not at http://localhost:8080): one clear notice, no calls. */
   const showBlocked = () => {
     const note = () => Object.assign(document.createElement("p"), { className: "notice", textContent: t("shareOriginBlocked").replace("{origin}", location.origin) });
@@ -677,34 +667,10 @@ export const initShare = (ctx) => {
     for (const b of document.querySelectorAll("#share-img-order button, #share-cfg-order button")) { b.disabled = true; }
     for (const id of ["share-img-prev", "share-img-next", "share-cfg-refresh", "share-cfg-prev", "share-cfg-next"]) { $(id).disabled = true; }
   };
-  let preloading = false;
-  /* Always run at start (the full-screen loading waits for it): finds the way to the Keydous servers, then the page on show. */
-  const preload = async (progress = () => {}) => {
-    preloading = true;
-    await findApi();
-    if (!reachable()) { preloading = false; showBlocked(); return; }
-    try { await preloadPage(progress); } finally { preloading = false; }
-  };
-  const preloadPage = async (progress) => {
-    progress(t("shareLoading"));
-    for (const b of document.querySelectorAll("[data-share-view]")) { b.setAttribute("aria-pressed", String(b.dataset.shareView === state.view)); }
-    $("share-images-box").hidden = state.view !== "images";
-    $("share-configs-box").hidden = state.view !== "configs";
-    if (state.view === "images") { await loadImages(); return; }
-    state.configs = readCache()?.configs ?? null;
-    if (state.configs) { renderConfigs(); }
-    const reading = scan();
-    if (state.configs?.length) { return; }
-    const watch = setInterval(() => progress($("share-cfg-state").textContent), 300);
-    try {
-      await Promise.race([reading, new Promise((resolve) => { const check = setInterval(() => { if (state.configs?.length) { clearInterval(check); resolve(); } }, 200); })]);
-    } finally { clearInterval(watch); }
-  };
 
   return {
-    preload,
     onShow: () => show(state.view),
-    onHide: () => { if (!preloading) { cancelAll(); } },   // another tab: the Library stops reading (not while the page starts)
+    onHide: () => cancelAll(),   // another tab: the Library stops reading
     rerender: () => { if (state.configs) { renderConfigs(); } },
   };
 };

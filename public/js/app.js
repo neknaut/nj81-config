@@ -459,35 +459,16 @@ const setScreenSource = (source, name) => {
 };
 
 let screenFile = null;   // the file on show (null: a picture from the library)
-/* The picture chosen on this machine (each browser keeps its own: several people can use the page): a library picture
-   by its id in localStorage, a file (a GIF is too big for localStorage) in IndexedDB. Shown again on the next visit,
-   connected or not. The keyboard cannot report the picture it shows, so nothing is read from it. */
+/* Each visit starts with no picture chosen (the preview says "Choose a picture"): the keyboard cannot report the picture
+   it shows, and a picture kept from an earlier visit showed on the drawing as if it were on the keyboard. What older
+   versions kept for that is removed. */
 const CHOSEN_KEY = "nj81-config.chosen";
-const rememberChosen = (choice) => {
-  try {
-    if (choice.gallery) { localStorage.setItem(CHOSEN_KEY, JSON.stringify({ gallery: choice.gallery })); pictureStore("readwrite", (store) => store.delete(CHOSEN_KEY)); }
-    else { localStorage.setItem(CHOSEN_KEY, JSON.stringify({ file: true })); pictureStore("readwrite", (store) => store.put({ blob: choice.file, name: choice.file.name, type: choice.file.type, at: Date.now() }, CHOSEN_KEY)); }
-  } catch (error) { /* private mode: nothing kept */ }
-};
-const restoreChosen = async () => {
-  let choice = null;
-  try { choice = JSON.parse(localStorage.getItem(CHOSEN_KEY) || "null"); } catch (error) { choice = null; }
-  if (!choice) { return; }
-  if (choice.gallery) {
-    const item = GALLERY.find((g) => g.id === choice.gallery);
-    const button = item && [...$("gallery").children].find((b) => b.title === item.name);
-    if (button) { stopGif(); screenFile = null; setScreenSource(button.source, item.name); markPending(false); }
-    return;
-  }
-  const kept = await pictureStore("readonly", (store) => store.get(CHOSEN_KEY));
-  if (!kept?.blob) { return; }
-  try {
-    await loadScreenFile(new File([kept.blob], kept.name || "picture", { type: kept.type || kept.blob.type }), { restored: true });
-    markPending(false);
-  } catch (error) { /* a broken entry: the default picture stays */ }
+const forgetChosen = () => {
+  try { localStorage.removeItem(CHOSEN_KEY); } catch (error) { /* private mode */ }
+  pictureStore("readwrite", (store) => store.delete(CHOSEN_KEY));
 };
 
-const loadScreenFile = async (file, { restored = false } = {}) => {
+const loadScreenFile = async (file) => {
   stopGif();
   const frames = file.type === "image/gif" || file.type === "image/webp" || file.type === "image/png" ? await decodeAnimation(file).catch(() => null) : null;
   if (frames) {
@@ -497,13 +478,12 @@ const loadScreenFile = async (file, { restored = false } = {}) => {
     setScreenSource(frames[0].bitmap, file.name);
     showGifFrame(0);
     playGif(true);
-    if (!restored) { log(`${file.name} (GIF, ${frames.length} ${t("gifFrames")})`, "info", "areaScreen"); }
+    log(`${file.name} (GIF, ${frames.length} ${t("gifFrames")})`, "info", "areaScreen");
   } else {
     setScreenSource(await createImageBitmap(file), file.name);
-    if (!restored) { log(`${file.name} (${screenPixels.width}×${screenPixels.height})`, "info", "areaScreen"); }
+    log(`${file.name} (${screenPixels.width}×${screenPixels.height})`, "info", "areaScreen");
   }
   screenFile = file;
-  if (!restored) { rememberChosen({ file }); }
 };
 const onScreenFile = async (event) => {
   const [file] = event.target.files;
@@ -527,7 +507,7 @@ const buildGallery = () => {
     const view = document.createElement("canvas");
     keepSharp(view, () => drawSharp(view, canvas));
     button.append(view, Object.assign(document.createElement("span"), { textContent: item.name }));
-    button.addEventListener("click", () => { stopGif(); screenFile = null; setScreenSource(canvas, item.name); rememberChosen({ gallery: item.id }); });
+    button.addEventListener("click", () => { stopGif(); screenFile = null; setScreenSource(canvas, item.name); });
     return button;
   });
   $("gallery").replaceChildren(...items);
@@ -1334,8 +1314,8 @@ const init = () => {
   buildGallery();
   keys = initKeys({ $, t, log, logOk, logWarn, logError, why, getNj: () => nj, keyEls, KEYS });
   share = initShare({
-    $, t, logOk, logWarn, logError, why, getNj: () => nj,
-    /* a shared picture / GIF goes to the Screen tab, ready to send */
+    $, t, logOk, why,
+    /* a shared picture / GIF: put in the Screen tab and sent at once (the Screen tab when there is nothing to send to) */
     usePicture: async (file) => {
       await loadScreenFile(file);
       markPending(true);
@@ -1366,7 +1346,7 @@ const init = () => {
       return `${keyLabel(v.original)} → ${action.type === "disabled" ? t("actDisabled") : describeAction(action)}`;
     },
   });
-  restoreChosen();   // the picture this browser chose last time
+  forgetChosen();
   $("learn-start").addEventListener("click", () => setLearning(true));
   $("learn-done").addEventListener("click", () => setLearning(false));
   for (const swatch of PRESET_COLOURS) {
