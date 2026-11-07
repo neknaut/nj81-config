@@ -39,7 +39,6 @@ export const hidForCode = (code) => BY_CODE.get(code)?.hid;
 export const keyLabel = (hid) => BY_HID.get(hid)?.label ?? `0x${hid.toString(16)}`;
 
 /* The driver's modifiers (its CF table): the second byte of a key action. */
-export const MODIFIERS = { ctrl: 224, shift: 225, alt: 226, win: 227 };
 const MODIFIER_NAME = { 224: "Ctrl", 225: "Shift", 226: "Alt", 227: "Win" };
 
 /* Media / system keys and mouse buttons, exactly as the driver's tables (MC, CC, MF) code them. */

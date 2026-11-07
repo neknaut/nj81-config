@@ -39,8 +39,8 @@ const KEYDOUS = {
 };
 const FILE_URL = "https://api3.rongyuan.tech:3816/download/bit_image_file/";
 const UPSTREAM_AT_ONCE = 4;   // calls to Keydous at the same time, for every visitor together: more and it answers "busy"
-/* A visitor may make this many calls a minute: lists are few; a page of pictures is 12 files and the Library reads 3 pages
-   ahead, so files get more room (a page turned quickly must not run out and lose its pictures). */
+/* A visitor may make this many calls a minute: lists are few; a page of pictures is 12 files, so files get more room
+   (pages turned quickly must not run out and lose their pictures). */
 const PER_VISITOR = { lists: 120, files: 900, perMs: 60_000 };
 /* Files kept in memory (they never change: named by md5), up to FILE_CACHE_BYTES: a picture asked for again (another visitor,
    another order) does not go to Keydous again. */
