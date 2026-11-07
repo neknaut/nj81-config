@@ -161,6 +161,38 @@ export const keyboardPreview = (light, lightPic) => {
   return canvas;
 };
 
+/* The page numbers, as the usual pagination components lay them out (MUI's usePagination: boundaryCount 1, siblingCount 1):
+   the first and last page, the current one with a neighbour on each side, "…" for the rest; a "…" that would hide one page
+   shows that page instead. The count of items stays the same (7 with siblings 1) wherever the current page is, so the
+   numbers and the arrows never move under the pointer. siblings 0 on a narrow screen (5 items). */
+const range = (a, b) => Array.from({ length: Math.max(0, b - a + 1) }, (_, i) => a + i);
+export const pageList = (current, total, siblings = 1) => {
+  const boundary = 1;
+  const start = range(1, Math.min(boundary, total));
+  const end = range(Math.max(total - boundary + 1, boundary + 1), total);
+  const from = Math.max(Math.min(current - siblings, total - boundary - siblings * 2 - 1), boundary + 2);
+  const to = Math.min(Math.max(current + siblings, boundary + siblings * 2 + 2), end.length ? end[0] - 2 : total - 1);
+  return [
+    ...start,
+    ...(from > boundary + 2 ? ["…"] : boundary + 1 < total - boundary ? [boundary + 1] : []),
+    ...range(from, to),
+    ...(to < total - boundary - 1 ? ["…"] : total - boundary > boundary ? [total - boundary] : []),
+    ...end,
+  ];
+};
+const narrow = () => globalThis.matchMedia?.("(max-width: 520px)").matches ?? false;
+/* Fills a pager with the numbers; the current page marked (aria-current), go(page) on a click. */
+const pageNumbers = (box, current, total, go, label) => {
+  box.replaceChildren(...pageList(current, total, narrow() ? 0 : 1).map((p) => {
+    if (p === "…") { return Object.assign(document.createElement("span"), { className: "page-gap", textContent: "…", ariaHidden: "true" }); }
+    const b = Object.assign(document.createElement("button"), { type: "button", className: "small-btn page-num", textContent: String(p) });
+    b.setAttribute("aria-label", `${label} ${p}`);
+    if (p === current) { b.setAttribute("aria-current", "page"); }
+    b.addEventListener("click", () => { if (p !== current) { go(p); } });
+    return b;
+  }));
+};
+
 const post = async (url, body, signal) => {
   const response = await fetch(url, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body), signal });
   if (!response.ok) { throw new Error(`HTTP ${response.status}`); }
@@ -185,8 +217,16 @@ export const initShare = (ctx) => {
   };
   const aborted = (error) => error?.name === "AbortError";
   const remember = () => { try { sessionStorage.setItem(VIEW_KEY, JSON.stringify({ view: state.view, imgOrder: state.imgOrder, imgPage: state.imgPage, cfgOrder: state.cfgOrder, cfgPage: state.cfgPage })); } catch (error) { /* private mode */ } };
-  $("share-img-order").value = state.imgOrder;
-  $("share-cfg-order").value = state.cfgOrder;
+  /* Newest / Featured (Most downloaded) are tabs: the one on show is marked */
+  const markOrder = (id, value) => {
+    for (const b of $(id).querySelectorAll("[data-order]")) {
+      const on = b.dataset.order === value;
+      b.setAttribute("aria-selected", String(on));
+      b.tabIndex = on ? 0 : -1;
+    }
+  };
+  markOrder("share-img-order", state.imgOrder);
+  markOrder("share-cfg-order", state.cfgOrder);
 
   /* ---------- pictures / GIFs ---------- */
   /* Files by md5 (the same picture is not fetched twice, e.g. in both orders), as blob URLs, decoded ahead so a page shows
@@ -268,8 +308,7 @@ export const initShare = (ctx) => {
     const key = keyOf(state.imgOrder, state.imgPage);
     cancelPictures(key);
     $("share-img-state").textContent = "";
-    $("share-img-page").textContent = `${state.imgPage} / ${state.imgPages}`;   // the new number at once
-    pagerState();
+    pagerState();   // the new page marked at once
     if (!pages.get(key)?.done) { box.classList.add("busy"); }
     try {
       const ready = pages.get(key)?.done;
@@ -287,14 +326,14 @@ export const initShare = (ctx) => {
       if (aborted(error)) { return; }
       $("share-img-state").textContent = `${t("shareFailed")}: ${why(error)}`;
     } finally { box.classList.remove("busy"); }
-    $("share-img-page").textContent = `${state.imgPage} / ${state.imgPages}`;
     remember();
     pagerState();
   };
   /* « ‹ page › »: first and previous off on the first page, next and last off on the last one. */
   function pagerState() {
-    $("share-img-first").disabled = $("share-img-prev").disabled = state.imgPage <= 1;
-    $("share-img-last").disabled = $("share-img-next").disabled = state.imgPage >= state.imgPages;
+    $("share-img-prev").disabled = state.imgPage <= 1;
+    $("share-img-next").disabled = state.imgPage >= state.imgPages;
+    pageNumbers($("share-img-page"), state.imgPage, state.imgPages, (p) => turn(0, p), t("sharePage"));
   }
   const card = (item, file) => {
     const image = item.bit_image;
@@ -418,10 +457,10 @@ export const initShare = (ctx) => {
     if (state.cfgOrder === "count") { list.sort((a, b) => (b.downloadTimes ?? 0) - (a.downloadTimes ?? 0)); }
     const pages = Math.max(1, Math.ceil(list.length / 10));
     state.cfgPage = Math.min(state.cfgPage, pages);
-    $("share-cfg-page").textContent = `${state.cfgPage} / ${pages}`;
+    pageNumbers($("share-cfg-page"), state.cfgPage, pages, (p) => { state.cfgPage = p; renderConfigs(); }, t("sharePage"));
     remember();
-    $("share-cfg-first").disabled = $("share-cfg-prev").disabled = state.cfgPage <= 1;
-    $("share-cfg-last").disabled = $("share-cfg-next").disabled = state.cfgPage >= pages;
+    $("share-cfg-prev").disabled = state.cfgPage <= 1;
+    $("share-cfg-next").disabled = state.cfgPage >= pages;
     const rows = list.slice((state.cfgPage - 1) * 10, state.cfgPage * 10);
     if (!rows.length && state.configs) { $("share-configs").replaceChildren(Object.assign(document.createElement("p"), { className: "hint", textContent: t("shareNoConfigs") })); return; }
     $("share-configs").replaceChildren(...rows.map(configRow));
@@ -478,7 +517,14 @@ export const initShare = (ctx) => {
     }
   };
   for (const b of document.querySelectorAll("[data-share-view]")) { b.addEventListener("click", () => show(b.dataset.shareView)); }
-  $("share-img-order").addEventListener("change", () => { state.imgOrder = $("share-img-order").value; state.imgPage = 1; loadImages(); });
+  $("share-img-order").addEventListener("click", (event) => {
+    const order = event.target.closest("[data-order]")?.dataset.order;
+    if (!order || order === state.imgOrder) { return; }
+    state.imgOrder = order;
+    state.imgPage = 1;
+    markOrder("share-img-order", order);
+    loadImages();
+  });
   const turn = (step, to = null) => {
     const page = Math.max(1, Math.min(state.imgPages, to ?? state.imgPage + step));
     if (page === state.imgPage) { return; }   // first / last page: nothing to ask the server
@@ -487,8 +533,7 @@ export const initShare = (ctx) => {
   };
   $("share-img-prev").addEventListener("click", () => turn(-1));
   $("share-img-next").addEventListener("click", () => turn(1));
-  $("share-img-first").addEventListener("click", () => turn(0, 1));
-  $("share-img-last").addEventListener("click", () => turn(0, state.imgPages));
+
   window.addEventListener("keydown", (event) => {
     if ($("tab-share").hidden || state.view !== "images" || event.altKey || event.ctrlKey || event.metaKey) { return; }
     if (event.target.closest?.("input, select, textarea")) { return; }
@@ -497,11 +542,17 @@ export const initShare = (ctx) => {
     if (event.key === "Home") { event.preventDefault(); turn(0, 1); }
     if (event.key === "End") { event.preventDefault(); turn(0, state.imgPages); }
   });
-  $("share-cfg-order").addEventListener("change", () => { state.cfgOrder = $("share-cfg-order").value; state.cfgPage = 1; renderConfigs(); });
+  $("share-cfg-order").addEventListener("click", (event) => {
+    const order = event.target.closest("[data-order]")?.dataset.order;
+    if (!order || order === state.cfgOrder) { return; }
+    state.cfgOrder = order;
+    state.cfgPage = 1;
+    markOrder("share-cfg-order", order);
+    renderConfigs();
+  });
   $("share-cfg-prev").addEventListener("click", () => { if (state.cfgPage > 1) { state.cfgPage -= 1; renderConfigs(); } });
   $("share-cfg-next").addEventListener("click", () => { state.cfgPage += 1; renderConfigs(); });
-  $("share-cfg-first").addEventListener("click", () => { state.cfgPage = 1; renderConfigs(); });
-  $("share-cfg-last").addEventListener("click", () => { state.cfgPage = Number.MAX_SAFE_INTEGER; renderConfigs(); });   // renderConfigs keeps it to the last page
+
   $("share-cfg-refresh").addEventListener("click", () => scan());
 
   /* At start (the full-screen loading waits for it): the first page of pictures, and the NJ81-ED settings (kept ones at
@@ -513,7 +564,8 @@ export const initShare = (ctx) => {
     const note = () => Object.assign(document.createElement("p"), { className: "notice", textContent: t("shareOriginBlocked").replace("{origin}", location.origin) });
     $("share-images").replaceChildren(note());
     $("share-configs").replaceChildren(note());
-    for (const id of ["share-img-order", "share-img-first", "share-img-prev", "share-img-next", "share-img-last", "share-cfg-order", "share-cfg-refresh", "share-cfg-first", "share-cfg-prev", "share-cfg-next", "share-cfg-last"]) { $(id).disabled = true; }
+    for (const b of document.querySelectorAll("#share-img-order button, #share-cfg-order button")) { b.disabled = true; }
+    for (const id of ["share-img-prev", "share-img-next", "share-cfg-refresh", "share-cfg-prev", "share-cfg-next"]) { $(id).disabled = true; }
   };
   let preloading = false;
   /* Always run at start (the full-screen loading waits for it): finds the way to the Keydous servers, then the page on show. */

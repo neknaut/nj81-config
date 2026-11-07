@@ -289,7 +289,19 @@ input[type="range"] { accent-color: var(--accent); }
 
 /* Share tab */
 .share-bar { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; margin-bottom: 12px; }
-.share-pager { margin-left: auto; display: inline-flex; align-items: center; gap: 8px; font-size: 13px; color: var(--muted); }
+/* the page numbers under the list, in the middle */
+.share-pages { display: flex; justify-content: center; margin-top: 16px; }
+.share-pager { display: inline-flex; align-items: center; gap: 8px; font-size: 13px; color: var(--muted); }
+.page-numbers { display: inline-flex; align-items: center; gap: 4px; justify-content: center; }
+.page-num, .page-arrow { min-width: 36px; min-height: 36px; padding: 0 8px; font-variant-numeric: tabular-nums; }   /* touch-sized */
+.page-arrow { font-size: 18px; line-height: 1; }
+.page-num[aria-current="page"] { background: var(--accent-bg); border-color: var(--accent); color: var(--accent); }
+.page-gap { width: 36px; text-align: center; color: var(--dim); }   /* as wide as a number: the pager keeps its width
+/* Newest / Featured: tabs with an underline (the Pictures / Settings switch above stays as chips) */
+.seg { display: inline-flex; gap: 4px; border-bottom: 1px solid var(--line); }
+.seg button { background: transparent; border: 0; border-bottom: 2px solid transparent; border-radius: 0; padding: 8px 12px; color: var(--muted); font-weight: 600; margin-bottom: -1px; }
+.seg button:hover { color: var(--ink); }
+.seg button[aria-selected="true"] { color: var(--accent); border-bottom-color: var(--accent); }
 .share-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(190px, 1fr)); gap: 12px; }
 .share-card { margin: 0; display: flex; flex-direction: column; gap: 8px; padding: 10px; border: 1px solid var(--line); border-radius: 12px; background: var(--raised); min-width: 0; }
 .share-shot { aspect-ratio: 2 / 1; background: #000; border-radius: 6px; overflow: hidden; display: grid; place-items: center; color: var(--dim); }
@@ -324,3 +336,17 @@ input[type="range"] { accent-color: var(--accent); }
 .share-card { content-visibility: auto; contain-intrinsic-size: auto 220px; }
 /* "Reduce motion": no fades or smooth scrolls (the keyboard drawing also slows to 10 frames a second) */
 @media (prefers-reduced-motion: reduce) { html { scroll-behavior: auto; } .app-loading, .share-grid { transition: none; } }
+
+/* The page's confirm dialog */
+.modal { padding: 0; border: 1px solid var(--line-2); border-radius: 16px; background: var(--panel); color: var(--ink); width: min(440px, calc(100vw - 32px)); box-shadow: 0 20px 60px rgba(0, 0, 0, 0.5); }
+.modal::backdrop { background: rgba(5, 7, 10, 0.65); backdrop-filter: blur(2px); }
+.modal[open] { animation: modal-in 0.14s ease-out; }
+@keyframes modal-in { from { opacity: 0; transform: translateY(6px) scale(0.98); } to { opacity: 1; transform: none; } }
+@media (prefers-reduced-motion: reduce) { .modal[open] { animation: none; } }
+.modal-box { display: flex; flex-direction: column; gap: 12px; padding: 22px; margin: 0; }
+.modal-box h2 { font-size: 17px; margin: 0; }
+.modal-box p { margin: 0; color: var(--muted); font-size: 14px; line-height: 1.55; }
+.modal-actions { display: flex; justify-content: flex-end; gap: 10px; margin-top: 6px; flex-wrap: wrap; }
+.modal-actions button { min-width: 96px; }
+button.danger { background: #d9433b; border-color: #d9433b; color: #fff; }
+button.danger:hover { background: #c23a33; }

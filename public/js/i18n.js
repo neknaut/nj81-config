@@ -12,6 +12,9 @@ const TEXT = {
     shareConfigs: "Cấu hình NJ81-ED",
     shareNote: "Chỉ đọc, không cần tài khoản. Ảnh và GIF: của mọi bàn phím. Cấu hình (đèn + phím): chỉ những cấu hình chia sẻ từ NJ81-ED.",
     shareNewest: "Mới nhất",
+    sharePage: "Trang",
+    sharePrev: "Trang trước",
+    shareNext: "Trang sau",
     sharePopular: "Nổi bật",
     shareMostDownloaded: "Nhiều lượt tải",
     shareRefresh: "Tìm cấu hình mới",
@@ -116,7 +119,11 @@ const TEXT = {
     sentAfter: "gửi sau",
     confirmedAfter: "bàn phím xác nhận sau",
     screenClearAll: "Xoá ảnh trên phím",
-    clearAllConfirm: "Gỡ mọi ảnh và GIF trên màn hình bàn phím (như nút Clear của driver Keydous)? Màn hình chỉ còn màn thông số.",
+    modalCancel: "Huỷ",
+    clearAllTitle: "Xoá ảnh và GIF trên bàn phím?",
+    clearAllOk: "Xoá ảnh và GIF",
+    shareKeysCount: "phím",
+    clearAllConfirm: "Mọi ảnh và GIF trên màn hình bàn phím sẽ bị gỡ (như nút Clear của driver Keydous), chỉ còn màn thông số. Việc xoá mất khoảng 40 giây, đừng rút cáp trong lúc đó. Không hoàn tác được.",
     clearingAll: "Đang xoá ảnh và GIF trên bàn phím, đừng rút cáp…",
     clearedAll: "Đã xoá ảnh và GIF: màn hình chỉ còn màn thông số",
     clearedNoConfirm: "Đã xoá xong theo thời gian đo được (bàn phím xoá trong khoảng 41–43 giây; trình duyệt không nhận được tin báo xong của bàn phím). Đừng bấm xoá lại: bàn phím sẽ xoá lại từ đầu",
@@ -149,7 +156,7 @@ const TEXT = {
     subProfile: "Lưu, nạp, xuất và nhập cấu hình.",
     subLog: "Mọi việc web đã làm và bàn phím đã trả lời.",
     startTitle: "Kết nối bàn phím để bắt đầu",
-    startText: "Cắm NJ81 bằng cáp USB-C rồi bấm 'Kết nối bàn phím'. Phần Đèn, Màn hình và Hồ sơ sẽ hiện ra khi web nhận ra bàn phím.",
+    startText: "Cắm NJ81 bằng cáp USB-C rồi bấm “Kết nối bàn phím”. Các tab (Đèn, Phím, Macro, Màn hình, Hồ sơ, Library, Nhật ký, Hướng dẫn) hiện ra khi web nhận ra bàn phím. Không thấy bàn phím trong danh sách: dùng cáp (không dùng Bluetooth hay 2.4G), tắt driver Keydous và các tab khác đang mở trang này, rồi bấm “Không thấy bàn phím? Hiện mọi thiết bị”.",
     disconnectedByUser: "Đã ngắt kết nối. Tải lại trang vẫn giữ ngắt, bấm 'Kết nối bàn phím' để nối lại.",
     reactiveLabel: "Hiệu ứng này chỉ sáng khi gõ phím",
     reactiveHint: "Hiệu ứng phản hồi phím: đèn chỉ sáng quanh phím vừa gõ, cả trên bàn phím thật lẫn trên hình. Gõ thử vài phím để thấy. Nếu bàn phím thật vẫn sáng khi không gõ, bỏ chọn ô ở trên.",
@@ -264,6 +271,9 @@ const TEXT = {
     shareConfigs: "NJ81-ED settings",
     shareNote: "Read only, no account. Pictures and GIFs: from every keyboard. Settings (lighting + keys): only those shared from an NJ81-ED.",
     shareNewest: "Newest",
+    sharePage: "Page",
+    sharePrev: "Previous page",
+    shareNext: "Next page",
     sharePopular: "Featured",
     shareMostDownloaded: "Most downloaded",
     shareRefresh: "Look for new settings",
@@ -368,7 +378,11 @@ const TEXT = {
     sentAfter: "sent after",
     confirmedAfter: "confirmed after",
     screenClearAll: "Clear keyboard pictures",
-    clearAllConfirm: "Remove every picture and GIF from the keyboard's screen (like the Keydous driver's Clear)? Only the status screen stays.",
+    modalCancel: "Cancel",
+    clearAllTitle: "Clear pictures and GIFs on the keyboard?",
+    clearAllOk: "Clear pictures and GIFs",
+    shareKeysCount: "keys",
+    clearAllConfirm: "Every picture and GIF on the keyboard's screen is removed (like the Keydous driver's Clear); only the status screen stays. It takes about 40 seconds: do not unplug the cable meanwhile. This cannot be undone.",
     clearingAll: "Clearing pictures and GIFs on the keyboard, do not unplug the cable…",
     clearedAll: "Pictures and GIFs cleared: only the status screen is left",
     clearedNoConfirm: "Cleared, by the measured time (the keyboard takes 41-43 s; its done report did not reach the browser). Do not press clear again: the keyboard would start over",
@@ -401,7 +415,7 @@ const TEXT = {
     subProfile: "Save, load, export and import settings.",
     subLog: "Everything the page did and what the keyboard answered.",
     startTitle: "Connect the keyboard to start",
-    startText: "Plug the NJ81 in with the USB-C cable and press 'Connect keyboard'. Lighting, Screen and Profile appear once the keyboard is recognised.",
+    startText: "Plug the NJ81 in with the USB-C cable and press “Connect keyboard”. The tabs (Lighting, Keys, Macro, Screen, Profile, Library, Log, Guide) appear once the keyboard is recognised. Not in the list: use the cable (not Bluetooth or 2.4G), close the Keydous driver and other tabs with this page, then press “Keyboard not listed? Show all devices”.",
     disconnectedByUser: "Disconnected. It stays that way after a reload; press 'Connect keyboard' to connect again.",
     reactiveLabel: "This effect lights only when keys are pressed",
     reactiveHint: "Reactive effect: the light shows only around keys just pressed, on the real keyboard and in the drawing. Type a few keys to see it. If the real keyboard lights up without typing, untick the box above.",
@@ -518,6 +532,7 @@ export const setLanguage = (language, root = document) => {
   root.querySelectorAll("[data-i18n]").forEach((el) => { el.textContent = t(el.dataset.i18n); });
   root.querySelectorAll("[data-i18n-placeholder]").forEach((el) => { el.placeholder = t(el.dataset.i18nPlaceholder); });
   root.querySelectorAll("[data-i18n-title]").forEach((el) => { el.title = t(el.dataset.i18nTitle); });
+  root.querySelectorAll("[data-i18n-aria]").forEach((el) => { el.setAttribute("aria-label", t(el.dataset.i18nAria)); });
   document.title = t("title");
 };
 
