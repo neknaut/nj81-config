@@ -344,12 +344,15 @@ const stopGif = () => {
   if (gif) { clearTimeout(gif.timer); }
   gif = null;
   $("gif-controls").hidden = true;
-  $("screen-slot-box").hidden = true;   // the slot picker is for GIFs; a still picture goes to the first slot
+  syncLayerBox();
 };
+/* "Picture layer" 1-5: shown for a still picture on a board with layers, never for a GIF (as the driver on the NJ81-ED). */
+const syncLayerBox = () => { $("screen-slot-box").hidden = !(nj?.model?.screen?.slots > 1) || Boolean(gif); };
 
 const setScreenSource = (source, name) => {
   $("screen-send").classList.add("pending");
   screenPixels = source;
+  syncLayerBox();
   profile.screen.name = name;
   $("screen-name").textContent = `${name} · ${source.width}×${source.height} → ${profile.screen.width}×${profile.screen.height}`;
   drawScreen();
@@ -389,7 +392,6 @@ const loadScreenFile = async (file, { restored = false } = {}) => {
   const frames = file.type === "image/gif" || file.type === "image/webp" || file.type === "image/png" ? await decodeAnimation(file).catch(() => null) : null;
   if (frames) {
     gif = { frames, index: 0, timer: null, playing: false };
-    $("screen-slot-box").hidden = !(nj?.model?.screen?.slots > 1);
     $("gif-frame").max = String(frames.length - 1);
     $("gif-controls").hidden = false;
     setScreenSource(frames[0].bitmap, file.name);
@@ -449,7 +451,7 @@ const updateScreenControls = () => {
   $("screen-device").hidden = !nj?.display;
   $("screen-connect-note").hidden = Boolean(nj?.display);
   $("screen-send").hidden = !screen;
-  $("screen-slot-box").hidden = !screen || screen.slots < 2 || !gif;   // only once a GIF is chosen
+  syncLayerBox();
   $("screen-clear-all").hidden = !(nj?.display && nj.client.family === "yc500");   // the driver's Clear, captured on an NJ81-ED
   $("screen-size-note").hidden = !screen?.assumed;
   $("screen-device-note").hidden = !screen || screen.assumed;
@@ -552,7 +554,7 @@ const sendScreenNj81Ed = async (slot, capture, progress) => {
   bar.hidden = false;
   $("screen-send").disabled = true;
   try {
-    const { count, delay } = await nj.client.uploadScreen(frames, nj.model.screen, { slot, delayMs, progress });
+    const { count, delay } = await nj.client.uploadScreen(frames, nj.model.screen, { layer: slot, delayMs, progress });
     logOk("areaScreen", count > 1 ? `${t("animationSent")} (${count} ${t("gifFrames")}, ${delay} ms/${t("gifFrame").toLowerCase()})` : t("pictureSentScreen"));
     const first = document.createElement("canvas");
     first.width = width;
@@ -576,7 +578,7 @@ const sendPicture = async () => {
   drawScreen();
   const canvas = $("screen-canvas");
   const capture = () => canvas.getContext("2d", { willReadFrequently: true }).getImageData(0, 0, width, height).data;
-  const slot = gif ? Number($("screen-slot").value) : 0;   // a still picture: the first slot
+  const slot = gif ? 0 : Number($("screen-slot").value) || 0;   // a still picture: its layer; a GIF: no layer (always the first)
   const bar = $("screen-progress");
   const progress = (done, total) => {
     bar.max = total;

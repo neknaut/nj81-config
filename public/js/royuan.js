@@ -201,9 +201,13 @@ export const picturePages = (slot, bytes, count = 1) => {
 /* ---------- NJ81-ED (yc500) screen, as the official Keydous driver sends it (read from the installed driver v3.2.23:
    drawFrameToKeyboardGIF, getTFTLCDDataRGBImg, setTFTLCDDataRGBImg) ----------
    One announce for the whole picture or GIF, then the pages of every frame:
-   announce [A5, frame 0, frame count, delay ms, len b0, len b1, 0, ck, left, top, right, bottom, left>>8, top>>8, right>>8,
-             bottom>>8, len b2, len b3, slot]   (slot 0-4 at byte 18; the keyboard answers byte 1 = 1 when ready)
+   announce [A5, frame, frame count, delay ms, len b0, len b1, 0, ck, left, top, right, bottom, left>>8, top>>8, right>>8,
+             bottom>>8, len b2, len b3, GIF layer]   (the keyboard answers byte 1 = 1 when ready)
    page     [25, frame, frame count, delay ms, page lo, page hi, length, ck, 56 bytes]
+   Layers, as the driver's screen page for the NJ81-ED: a still picture goes into one of 5 layers ("Layer" 1-5, its
+   picLayer), sent in the frame byte (byte 1) of the announce and of every page; a GIF has no layer choice on this board
+   (the driver offers "Dynamic layers" only on NJ98 boards): frame bytes 0..n-1 and byte 18 (its gifLayer) 0.
+   Checked on a real NJ81-ED: a still sent into layer 2.
    The pixels are cut to the box holding every non-black pixel of all the frames, column by column, RGB565 high byte first.
    The delay is the average of the GIF's frame delays in ms, at most 255. */
 export const TFT = { MAX_FRAMES: 50, MAX_DELAY_MS: 255, PAGE_GAP_MS: 3 };
@@ -249,10 +253,10 @@ export const boxBytes = (rgba, width, box) => {
   return out;
 };
 
-export const tftAnnounce = ({ count, delay, length, box, slot }) => {
-  const data = packet(OP.PICTURE_ANNOUNCE, [0, count, delay, length & 0xff, (length >> 8) & 0xff, 0, 0,
+export const tftAnnounce = ({ frame = 0, count, delay, length, box, gifLayer = 0 }) => {
+  const data = packet(OP.PICTURE_ANNOUNCE, [frame, count, delay, length & 0xff, (length >> 8) & 0xff, 0, 0,
     box.left & 0xff, box.top & 0xff, box.right & 0xff, box.bottom & 0xff, box.left >> 8, box.top >> 8, box.right >> 8, box.bottom >> 8,
-    (length >> 16) & 0xff, (length >> 24) & 0xff, slot]);
+    (length >> 16) & 0xff, (length >> 24) & 0xff, gifLayer]);
   return data;
 };
 
@@ -596,11 +600,11 @@ export class Royuan {
     });
   }
 
-  /* NJ81-ED (yc500): a still picture (one frame) or a GIF into slot 0..slots-1, exactly as the official driver sends it
-     (see TFT above). frames: rgba arrays of the whole screen; delayMs: the GIF's average frame delay. */
-  async uploadScreen(frames, { width, height, slots }, { slot = 0, delayMs = 0, progress = () => {} } = {}) {
+  /* NJ81-ED (yc500): a still picture into layer 0..slots-1, or a GIF, exactly as the official driver sends it (see TFT
+     above). frames: rgba arrays of the whole screen; delayMs: the GIF's average frame delay; layer: a still's layer. */
+  async uploadScreen(frames, { width, height, slots }, { layer = 0, delayMs = 0, progress = () => {} } = {}) {
     if (this.family !== "yc500") { throw new RoyuanError("This upload is the NJ81-ED's (yc500)"); }
-    if (!Number.isInteger(slot) || slot < 0 || slot >= slots) { throw new RoyuanError(`Picture slot must be 1-${slots}`); }
+    if (!Number.isInteger(layer) || layer < 0 || layer >= slots) { throw new RoyuanError(`Picture layer must be 1-${slots}`); }
     if (!frames.length || frames.length > TFT.MAX_FRAMES) { throw new RoyuanError(`A GIF has 1-${TFT.MAX_FRAMES} frames`); }
     if (frames.some((rgba) => rgba.length !== width * height * 4)) { throw new RoyuanError("Picture size does not match the screen"); }
     const count = frames.length;
@@ -609,13 +613,13 @@ export class Royuan {
     const data = frames.map((rgba) => boxBytes(rgba, width, box));
     let ready = false;
     for (let attempt = 0; attempt < 10 && !ready; attempt += 1) {
-      const reply = await this.get(OP.PICTURE_ANNOUNCE, [...tftAnnounce({ count, delay, length: data[0].length, box, slot }).subarray(1, 19)]);
+      const reply = await this.get(OP.PICTURE_ANNOUNCE, [...tftAnnounce({ frame: count > 1 ? 0 : layer, count, delay, length: data[0].length, box }).subarray(1, 19)]);
       ready = reply[1] === 1;
       if (!ready) { await this.sleep(this.timing.readyGapMs); }
     }
     if (!ready) { throw new RoyuanError("The screen did not accept the picture"); }
     await this.sleep(this.timing.readyGapMs);   // the driver waits 100 ms after the keyboard says ready
-    const pages = data.flatMap((bytes, frame) => tftPages({ frame, count, delay }, bytes));
+    const pages = data.flatMap((bytes, frame) => tftPages({ frame: count > 1 ? frame : layer, count, delay }, bytes));
     for (let i = 0; i < pages.length; i += 1) {
       await this.#serial(async () => { await this.#send(pages[i]); await this.sleep(Math.min(this.timing.pageGapMs, TFT.PAGE_GAP_MS)); });
       progress(i + 1, pages.length);

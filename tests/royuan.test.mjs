@@ -374,7 +374,7 @@ test("Clear pictures and GIFs: the official driver's bare 0xAC (captured on an N
   assert.ok(quiet.ms >= 5000);
 });
 
-test("NJ81-ED screen: one announce (slot at byte 18, frame count, delay in ms, the box), then every frame's pages with the delay", async () => {
+test("NJ81-ED screen: one announce (frame count, delay in ms, the box, GIF layer 0 at byte 18), then every frame's pages; a still goes into its layer", async () => {
   const { screenBox, boxBytes, tftAnnounce } = await import("../public/js/royuan.js");
   const w = 4;
   const h = 2;
@@ -384,22 +384,29 @@ test("NJ81-ED screen: one announce (slot at byte 18, frame count, delay in ms, t
   assert.deepEqual(screenBox([f1, f2], w, h), { left: 1, top: 0, right: 3, bottom: 2 }, "the box around every lit pixel of all frames");
   assert.deepEqual(screenBox([frame([])], w, h), { left: 0, top: 0, right: w, bottom: h }, "all black: the whole screen");
   assert.deepEqual([...boxBytes(f1, w, { left: 1, top: 0, right: 3, bottom: 2 })], [0xf8, 0, 0, 0, 0, 0, 0, 0], "column by column, red at (1,0) first");
-  const a = tftAnnounce({ count: 3, delay: 100, length: 25600, box: { left: 0, top: 0, right: 160, bottom: 80 }, slot: 2 });
+  const a = tftAnnounce({ count: 3, delay: 100, length: 25600, box: { left: 0, top: 0, right: 160, bottom: 80 } });
   assert.deepEqual([...a.subarray(0, 7)], [0xa5, 0, 3, 100, 0x00, 0x64, 0]);
-  assert.deepEqual([...a.subarray(8, 19)], [0, 0, 160, 80, 0, 0, 0, 0, 0, 0, 2]);
+  assert.deepEqual([...a.subarray(8, 19)], [0, 0, 160, 80, 0, 0, 0, 0, 0, 0, 0]);
 
   const { transport, state } = fakeNj81Ed();
   const replies = transport.setFeature;
   transport.setFeature = async (data) => { await replies(data); if (data[0] === OP.PICTURE_ANNOUNCE) { const r = new Uint8Array(64); r[0] = 0xa5; r[1] = 1; state.pending = r; } };
   const nj = new Royuan(transport, fast);
   nj.family = "yc500";
-  const result = await nj.uploadScreen([f1, f2, f1], { width: w, height: h, slots: 5 }, { slot: 4, delayMs: 83.4 });
+  const result = await nj.uploadScreen([f1, f2, f1], { width: w, height: h, slots: 5 }, { layer: 4, delayMs: 83.4 });
   assert.deepEqual([result.count, result.delay], [3, 83], "the GIF's average delay in ms");
   const sent = state.sent.filter((p) => p[0] === OP.PICTURE_ANNOUNCE || p[0] === OP.PICTURE_DATA);
   assert.equal(sent.filter((p) => p[0] === OP.PICTURE_ANNOUNCE).length, 1, "one announce for the whole GIF");
-  assert.equal(sent.find((p) => p[0] === OP.PICTURE_ANNOUNCE)[18], 4, "the slot at byte 18");
+  assert.deepEqual([...sent.find((p) => p[0] === OP.PICTURE_ANNOUNCE).subarray(1, 2)], [0], "a GIF: frame 0 (the layer is not used)");
+  assert.equal(sent.find((p) => p[0] === OP.PICTURE_ANNOUNCE)[18], 0, "the GIF layer at byte 18 is 0 on the NJ81-ED");
   assert.deepEqual(sent.filter((p) => p[0] === OP.PICTURE_DATA).map((p) => [...p.subarray(1, 7)]), [[0, 3, 83, 0, 0, 8], [1, 3, 83, 0, 0, 8], [2, 3, 83, 0, 0, 8]]);
-  await assert.rejects(() => nj.uploadScreen([f1], { width: w, height: h, slots: 5 }, { slot: 5 }), RoyuanError);
+  state.sent.length = 0;
+  await nj.uploadScreen([f1], { width: w, height: h, slots: 5 }, { layer: 2 });
+  const still = state.sent.filter((p) => p[0] === OP.PICTURE_ANNOUNCE || p[0] === OP.PICTURE_DATA);
+  assert.deepEqual([...still.find((p) => p[0] === OP.PICTURE_ANNOUNCE).subarray(1, 4)], [2, 1, 0], "a still: its layer in the frame byte, 1 frame, no delay");
+  assert.equal(still.find((p) => p[0] === OP.PICTURE_ANNOUNCE)[18], 0);
+  assert.deepEqual(still.filter((p) => p[0] === OP.PICTURE_DATA).map((p) => [...p.subarray(1, 4)]), [[2, 1, 0]], "its pages carry the layer too");
+  await assert.rejects(() => nj.uploadScreen([f1], { width: w, height: h, slots: 5 }, { layer: 5 }), RoyuanError);
 });
 
 test("a read refused right after a write is tried again; still refused: sent but unconfirmed, not a failure", async () => {
