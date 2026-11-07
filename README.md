@@ -131,6 +131,7 @@ npm test      # node --test: protocol, keys and macros, lighting, profiles, tran
 | [`public/js/lighting-nj81.js`](public/js/lighting-nj81.js), [`layout.js`](public/js/layout.js) | The keyboard drawing and its effects |
 | [`public/js/i18n.js`](public/js/i18n.js), [`guide.js`](public/js/guide.js), [`gallery.js`](public/js/gallery.js) | Translations, the Guide tab, built-in pictures |
 | [`public/js/fonts.js`](public/js/fonts.js) | Adds the Google Fonts stylesheet without holding back the first paint |
+| [`scripts/static-text.mjs`](scripts/static-text.mjs) | Writes the Vietnamese text into `index.html` so the page draws at once without shifting; run it after changing a text in `i18n.js` (a test checks) |
 | [`scripts/og-image.mjs`](scripts/og-image.mjs) | Draws `public/og.png`, the picture shown with a shared link (`node scripts/og-image.mjs`) |
 | [`docs/`](docs) | [Protocol notes](docs/protocol-notes.md), [capturing the official driver](docs/capturing-usb.md) |
 | [`tests/`](tests) | Unit tests |

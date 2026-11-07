@@ -75,25 +75,25 @@
     </div>
 
     <section class="device" aria-labelledby="h-conn">
-      <h2 id="h-conn" class="sr-only" data-i18n="connection"></h2>
-      <div class="device-state"><span id="status-dot" class="dot"></span><span id="status" data-i18n="status_off"></span></div>
+      <h2 id="h-conn" class="sr-only" data-i18n="connection">Kết nối</h2>
+      <div class="device-state"><span id="status-dot" class="dot"></span><span id="status" data-i18n="status_off">Chưa kết nối</span></div>
       <p id="device-name" class="device-text" hidden></p>
       <p id="device-info" class="device-text" hidden></p>
-      <button id="connect" type="button" class="primary" data-i18n="connect"></button>
-      <button id="connect-other" type="button" data-i18n="connectOther"></button>
-      <button id="disconnect" type="button" class="danger" data-i18n="disconnect" hidden></button>
-      <p id="connection-help" class="device-text" data-i18n="connectionHelp"></p>
+      <button id="connect" type="button" class="primary" data-i18n="connect">Kết nối bàn phím</button>
+      <button id="connect-other" type="button" data-i18n="connectOther">Không thấy bàn phím? Hiện mọi thiết bị</button>
+      <button id="disconnect" type="button" class="danger" data-i18n="disconnect" hidden>Ngắt kết nối</button>
+      <p id="connection-help" class="device-text" data-i18n="connectionHelp">Cắm dây USB-C, chọn thiết bị NJ81 trong hộp thoại của trình duyệt. Bluetooth thường không mở được cấu hình.</p>
     </section>
 
     <nav id="nav" class="nav" aria-label="Menu" hidden>
-      <button type="button" data-tab="light" data-i18n="lighting"></button>
-      <button type="button" data-tab="keys" data-i18n="keysTab"></button>
-      <button type="button" data-tab="macro" data-i18n="macroTab"></button>
-      <button type="button" data-tab="screen" data-i18n="screen"></button>
-      <button type="button" data-tab="profile" data-i18n="profile"></button>
-      <button type="button" data-tab="share" data-i18n="shareTab"></button>
-      <button type="button" data-tab="log" data-i18n="log"></button>
-      <button type="button" data-tab="guide" data-i18n="guide"></button>
+      <button type="button" data-tab="light" data-i18n="lighting">Đèn</button>
+      <button type="button" data-tab="keys" data-i18n="keysTab">Phím</button>
+      <button type="button" data-tab="macro" data-i18n="macroTab">Macro</button>
+      <button type="button" data-tab="screen" data-i18n="screen">Màn hình</button>
+      <button type="button" data-tab="profile" data-i18n="profile">Hồ sơ</button>
+      <button type="button" data-tab="share" data-i18n="shareTab">Library</button>
+      <button type="button" data-tab="log" data-i18n="log">Nhật ký</button>
+      <button type="button" data-tab="guide" data-i18n="guide">Hướng dẫn</button>
     </nav>
 
     <div class="side-foot">
@@ -101,17 +101,17 @@
         <button type="button" data-lang="vi" aria-pressed="true">VI</button>
         <button type="button" data-lang="en" aria-pressed="false">EN</button>
       </div>
-      <p data-i18n="footer"></p>
+      <p data-i18n="footer">Dự án không liên kết với Keydous. Không có lệnh firmware trong mã nguồn.</p>
     </div>
   </aside>
 
   <main class="main">
-    <p id="unsupported" class="notice" hidden data-i18n="notSupported"></p>
+    <p id="unsupported" class="notice" hidden data-i18n="notSupported">Trình duyệt này không có WebHID. Dùng Chrome hoặc Edge trên máy tính (HTTPS hoặc localhost).</p>
 
     <div class="main-head">
       <div>
-        <h1 id="page-title" data-i18n="connection">Connection</h1>
-        <p id="page-sub" class="sub" data-i18n="connectionHelp">Plug in the USB-C cable and pick the NJ81 in the browser's chooser.</p>
+        <h1 id="page-title" data-i18n="connection">Kết nối</h1>
+        <p id="page-sub" class="sub" data-i18n="connectionHelp">Cắm dây USB-C, chọn thiết bị NJ81 trong hộp thoại của trình duyệt. Bluetooth thường không mở được cấu hình.</p>
       </div>
       <div id="confirm-pill" class="pill" hidden>
         <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 6 9 17l-5-5"></path></svg>
@@ -120,16 +120,16 @@
     </div>
 
     <section id="start-hint" class="panel start-hint">
-      <h2 data-i18n="startTitle">Connect the keyboard to start</h2>
-      <p data-i18n="startText">Plug the NJ81 in with the USB-C cable and press “Connect keyboard”.</p>
+      <h2 data-i18n="startTitle">Kết nối bàn phím để bắt đầu</h2>
+      <p data-i18n="startText">Cắm NJ81 bằng cáp USB-C rồi bấm “Kết nối bàn phím”. Các tab (Đèn, Phím, Macro, Màn hình, Hồ sơ, Library, Nhật ký, Hướng dẫn) hiện ra khi web nhận ra bàn phím. Không thấy bàn phím trong danh sách: dùng cáp (không dùng Bluetooth hay 2.4G), tắt driver Keydous và các tab khác đang mở trang này, rồi bấm “Không thấy bàn phím? Hiện mọi thiết bị”.</p>
       <div class="start-about">
-        <h2 data-i18n="aboutTitle">What NJ81 Config does</h2>
-        <p data-i18n="aboutText">A free, unofficial configurator for the Keydous NJ81 keyboard (tested on the NJ81-ED) that runs in Chrome or Edge, with no driver to install.</p>
+        <h2 data-i18n="aboutTitle">NJ81 Config làm được gì</h2>
+        <p data-i18n="aboutText">Phần mềm cấu hình miễn phí, không chính thức cho bàn phím Keydous NJ81 (đã thử trên NJ81-ED), chạy ngay trên Chrome hoặc Edge, không cần cài driver.</p>
         <ul>
-          <li data-i18n="aboutLight">RGB lighting: every built-in effect, colour or rainbow, brightness, speed and direction.</li>
-          <li data-i18n="aboutKeys">Key remaps, media and mouse keys, the Fn layer and macros.</li>
-          <li data-i18n="aboutScreen">The 160×80 screen: your own pictures and GIFs, sharp, moved into place, sent with a progress bar.</li>
-          <li data-i18n="aboutLibrary">A library of pictures, GIFs and NJ81-ED settings shared by Keydous users, applied in one click.</li>
+          <li data-i18n="aboutLight">Đèn RGB: mọi hiệu ứng có sẵn, một màu hoặc cầu vồng, độ sáng, tốc độ và hướng.</li>
+          <li data-i18n="aboutKeys">Đổi phím, phím media và chuột, lớp Fn và macro.</li>
+          <li data-i18n="aboutScreen">Màn hình 160×80: ảnh và GIF của bạn, hiển thị nét, kéo chỉnh vị trí, gửi lên kèm % tiến độ.</li>
+          <li data-i18n="aboutLibrary">Thư viện ảnh, GIF và cấu hình NJ81-ED do người dùng Keydous chia sẻ, áp dụng bằng một lần bấm.</li>
         </ul>
       </div>
     </section>
@@ -137,8 +137,8 @@
     <!-- The keyboard drawing, on the Lighting and Screen tabs -->
     <section id="keyboard-panel" class="panel" aria-label="Keyboard" hidden>
       <div class="keyboard-bar">
-        <p class="hint" data-i18n="typeHint"></p>
-        <button id="mini-clock" type="button" class="small-btn" data-i18n="screenClock" data-i18n-title="screenClockTitle"></button>
+        <p class="hint" data-i18n="typeHint">Gõ phím trên bàn phím thật (khi trang này đang mở) để thấy phím sáng trên hình.</p>
+        <button id="mini-clock" type="button" class="small-btn" data-i18n="screenClock" data-i18n-title="screenClockTitle">Đồng bộ giờ</button>
       </div>
       <div id="keyboard" class="keyboard" role="group" aria-label="Keyboard preview"></div>
     </section>
@@ -148,58 +148,58 @@
 
       <div class="cols">
         <section class="panel" aria-labelledby="h-effect">
-          <h2 id="h-effect"><span data-i18n="effect"></span> <span id="effect-count" class="h-note"></span></h2>
+          <h2 id="h-effect"><span data-i18n="effect">Hiệu ứng</span> <span id="effect-count" class="h-note"></span></h2>
           <select id="effect" class="sr-only" tabindex="-1" aria-hidden="true"></select>
           <div id="effect-list" class="effect-list"></div>
           <div id="mode-tools" class="tools" hidden>
-            <button id="learn-start" type="button" data-i18n="learnStart"></button>
-            <button id="show-modes" type="button" data-i18n="showModes" hidden></button>
+            <button id="learn-start" type="button" data-i18n="learnStart">Dò chế độ đèn của bàn phím</button>
+            <button id="show-modes" type="button" data-i18n="showModes" hidden>Hiện lại mọi hiệu ứng</button>
           </div>
           <div id="learn-box" class="notice" hidden>
-            <p data-i18n="learnHelp"></p>
-            <p><span data-i18n="learnSeen"></span>: <span id="learn-seen">-</span></p>
-            <button id="learn-done" type="button" class="primary" data-i18n="learnFinish"></button>
+            <p data-i18n="learnHelp">Đang dò: dùng phím đổi hiệu ứng trên chính bàn phím (xem hướng dẫn kèm NJ81, thường là Fn + một phím) để chuyển qua từng hiệu ứng, chờ khoảng 1 giây ở mỗi hiệu ứng. Web ghi lại đúng các chế độ bàn phím có.</p>
+            <p><span data-i18n="learnSeen">Đã thấy</span>: <span id="learn-seen">-</span></p>
+            <button id="learn-done" type="button" class="primary" data-i18n="learnFinish">Xong, chỉ hiện các chế độ này</button>
           </div>
         </section>
 
         <section class="panel tune" aria-labelledby="h-tune">
-          <h2 id="h-tune" data-i18n="tune"></h2>
+          <h2 id="h-tune" data-i18n="tune">Tuỳ chỉnh</h2>
           <div id="light-option-box" class="field" hidden>
-            <div class="label" data-i18n="direction"></div>
+            <div class="label" data-i18n="direction">Hướng</div>
             <select id="light-option" class="sr-only" tabindex="-1" aria-hidden="true"></select>
             <div id="dir-chips" class="chips"></div>
           </div>
           <div id="color-box" class="field">
-            <div class="label"><span data-i18n="color"></span> <span id="color-hex" class="value mono"></span></div>
+            <div class="label"><span data-i18n="color">Màu</span> <span id="color-hex" class="value mono"></span></div>
             <div id="swatches" class="swatches">
               <label class="swatch custom" data-i18n-title="colorCustom"><input id="color" type="color" value="#ff7a66"><span aria-hidden="true">+</span></label>
             </div>
           </div>
-          <label id="rainbow-box" class="check" hidden><input id="rainbow" type="checkbox"> <span data-i18n="rainbow"></span></label>
+          <label id="rainbow-box" class="check" hidden><input id="rainbow" type="checkbox"> <span data-i18n="rainbow">Màu cầu vồng (thay cho màu đơn)</span></label>
           <div id="brightness-box" class="field">
-            <div class="label"><span data-i18n="brightness"></span> <output id="brightness-out" class="value"></output></div>
+            <div class="label"><span data-i18n="brightness">Độ sáng</span> <output id="brightness-out" class="value"></output></div>
             <input id="brightness" type="range" min="0" max="100" value="80" class="sr-only" tabindex="-1" aria-hidden="true">
             <div id="brightness-steps" class="steps"></div>
           </div>
           <div id="speed-box" class="field">
-            <div class="label"><span data-i18n="speed"></span> <output id="speed-out" class="value"></output></div>
+            <div class="label"><span data-i18n="speed">Tốc độ</span> <output id="speed-out" class="value"></output></div>
             <input id="speed" type="range" min="0" max="100" value="50" class="sr-only" tabindex="-1" aria-hidden="true">
             <div id="speed-steps" class="steps"></div>
           </div>
           <div class="field">
-            <label class="label" for="caps" data-i18n="capsColour"></label>
-            <select id="caps"><option value="white" data-i18n="capsWhite"></option><option value="black" data-i18n="capsBlack"></option></select>
+            <label class="label" for="caps" data-i18n="capsColour">Màu keycap trên hình</label>
+            <select id="caps"><option value="white" data-i18n="capsWhite">Trắng (như NJ81 trắng)</option><option value="black" data-i18n="capsBlack">Đen (đèn phủ cả phím)</option></select>
           </div>
         </section>
 
         <section class="panel" aria-labelledby="h-status">
-          <div class="panel-head"><h2 id="h-status" data-i18n="statusTitle"></h2><button type="button" class="small-btn clear-log" data-i18n="clearLog"></button></div>
+          <div class="panel-head"><h2 id="h-status" data-i18n="statusTitle">Trạng thái</h2><button type="button" class="small-btn clear-log" data-i18n="clearLog">Xoá nhật ký</button></div>
           <div id="light-status" hidden>
             <table class="status">
-              <thead><tr><th data-i18n="statusField"></th><th data-i18n="statusSent"></th><th data-i18n="statusKeyboard"></th></tr></thead>
+              <thead><tr><th data-i18n="statusField">Mục</th><th data-i18n="statusSent">Web gửi</th><th data-i18n="statusKeyboard">Bàn phím đang</th></tr></thead>
               <tbody id="light-status-body"></tbody>
             </table>
-            <p class="hint"><span data-i18n="effectsTried"></span>: <span id="effect-report">-</span></p>
+            <p class="hint"><span data-i18n="effectsTried">Hiệu ứng đã thử</span>: <span id="effect-report">-</span></p>
           </div>
           <div id="mini-log" class="mini-log" aria-live="polite"></div>
         </section>
@@ -208,25 +208,25 @@
 
     <!-- Keys: laid out like the official driver -->
     <div id="tab-keys" class="tab needs-keyboard" hidden>
-      <p id="keys-unsupported" class="notice" data-i18n="keysUnsupported" hidden></p>
+      <p id="keys-unsupported" class="notice" data-i18n="keysUnsupported" hidden>Gán phím hiện chỉ có cho NJ81-ED.</p>
       <div class="keys-layout">
         <section class="panel kside" aria-label="Current setting">
-          <label class="switch-row"><span data-i18n="layerFn"></span><input id="fn-layer" type="checkbox" class="switch"></label>
-          <button id="kread" type="button" data-i18n="keysReadCurrent"></button>
+          <label class="switch-row"><span data-i18n="layerFn">Lớp Fn (phím tắt)</span><input id="fn-layer" type="checkbox" class="switch"></label>
+          <button id="kread" type="button" data-i18n="keysReadCurrent">Đọc cấu hình hiện tại</button>
           <p id="keys-state" class="hint"></p>
           <div class="kset">
-            <div class="kset-title"><span data-i18n="keysCurrentSetting"></span> · <strong id="kset-key">—</strong></div>
+            <div class="kset-title"><span data-i18n="keysCurrentSetting">Cài đặt hiện tại</span> · <strong id="kset-key">—</strong></div>
             <div class="kset-row"><span id="kset-profile-label"></span>: <span id="kset-profile"></span></div>
-            <div class="kset-row"><span data-i18n="layerFn"></span>: <span id="kset-fn"></span></div>
+            <div class="kset-row"><span data-i18n="layerFn">Lớp Fn (phím tắt)</span>: <span id="kset-fn"></span></div>
           </div>
-          <p id="key-fn-note" class="notice" data-i18n="keysFnNote" hidden></p>
+          <p id="key-fn-note" class="notice" data-i18n="keysFnNote" hidden>Phím Fn không đổi được, để lớp Fn luôn dùng được.</p>
         </section>
         <section class="panel kmain" aria-label="Key action">
           <nav class="kcats" aria-label="Kind">
-            <button type="button" data-kcat="key" data-i18n="kcatKey"></button>
-            <button type="button" data-kcat="macro" data-i18n="kcatMacro"></button>
-            <button type="button" data-kcat="media" data-i18n="kcatMedia"></button>
-            <button type="button" data-kcat="mouse" data-i18n="kcatMouse"></button>
+            <button type="button" data-kcat="key" data-i18n="kcatKey">Phím</button>
+            <button type="button" data-kcat="macro" data-i18n="kcatMacro">Macro</button>
+            <button type="button" data-kcat="media" data-i18n="kcatMedia">Media</button>
+            <button type="button" data-kcat="mouse" data-i18n="kcatMouse">Chuột</button>
           </nav>
           <div class="kbody">
             <div class="kpane" data-kpane="key">
@@ -246,24 +246,24 @@
             </div>
             <div class="kpane" data-kpane="macro" hidden>
               <div id="kmacro-list" class="kmacro-list"></div>
-              <p class="hint" data-i18n="kmacroHint"></p>
+              <p class="hint" data-i18n="kmacroHint">Chọn một macro, rồi chọn kiểu chạy bên dưới và bấm Xác nhận. Ghi và sửa macro ở tab Macro.</p>
             </div>
             <div class="kpane" data-kpane="media" hidden><div id="kmedia-list" class="kgrid"></div></div>
             <div class="kpane" data-kpane="mouse" hidden><div id="kmouse-list" class="kgrid"></div></div>
             <div id="kvirtual" class="kvirtual" hidden>
-              <div class="kvirtual-head"><span data-i18n="keysPickFromList"></span><button id="kvirtual-close" type="button" class="small-btn" aria-label="Close">✕</button></div>
+              <div class="kvirtual-head"><span data-i18n="keysPickFromList">Chọn trong danh sách</span><button id="kvirtual-close" type="button" class="small-btn" aria-label="Close">✕</button></div>
               <div id="kvirtual-keys" class="kvirtual-keys"></div>
             </div>
             <div id="kmacro-modes" class="kmodes" hidden>
-              <label class="kcheck"><input type="checkbox" data-kmode="times" checked><span data-i18n="macroMode_times"></span></label>
+              <label class="kcheck"><input type="checkbox" data-kmode="times" checked><span data-i18n="macroMode_times">Lặp</span></label>
               <input id="macro-repeat" type="number" min="1" max="65535" value="1" aria-label="Repeat count">
-              <label class="kcheck"><input type="checkbox" data-kmode="toggle"><span data-i18n="macroMode_toggle"></span></label>
-              <label class="kcheck"><input type="checkbox" data-kmode="hold"><span data-i18n="macroMode_hold"></span></label>
+              <label class="kcheck"><input type="checkbox" data-kmode="toggle"><span data-i18n="macroMode_toggle">Tự chạy (bật / tắt)</span></label>
+              <label class="kcheck"><input type="checkbox" data-kmode="hold"><span data-i18n="macroMode_hold">Khi giữ phím</span></label>
             </div>
             <div class="kfoot">
-              <label class="kcheck"><input id="kforbidden" type="checkbox"><span data-i18n="actDisabled"></span></label>
-              <button id="kreset" type="button" data-i18n="keysResetOne"></button>
-              <button id="kconfirm" type="button" class="primary" data-i18n="keysConfirm"></button>
+              <label class="kcheck"><input id="kforbidden" type="checkbox"><span data-i18n="actDisabled">Vô hiệu phím</span></label>
+              <button id="kreset" type="button" data-i18n="keysResetOne">Đặt lại</button>
+              <button id="kconfirm" type="button" class="primary" data-i18n="keysConfirm">Xác nhận</button>
             </div>
           </div>
         </section>
@@ -273,68 +273,68 @@
     <!-- Screen -->
     <div id="tab-screen" class="tab needs-keyboard" hidden>
       <section id="screen-card" class="panel" aria-labelledby="h-screen">
-        <h2 id="h-screen" data-i18n="screen"></h2>
+        <h2 id="h-screen" data-i18n="screen">Màn hình</h2>
         <div class="screen-layout">
           <div class="screen-left">
           <canvas id="screen-canvas" width="160" height="80" hidden></canvas>
           <div class="screen-frame">
             <canvas id="screen-view" class="screen" tabindex="0" role="button" aria-label="Screen preview" data-i18n-title="screenPickTitle"></canvas>
-            <span id="screen-empty" class="screen-empty" aria-hidden="true"><b>+</b><span data-i18n="screenPick"></span><small data-i18n="screenPickHint"></small></span>
+            <span id="screen-empty" class="screen-empty" aria-hidden="true"><b>+</b><span data-i18n="screenPick">Chọn ảnh</span><small data-i18n="screenPickHint">PNG, JPG hoặc GIF · hoặc thả file vào đây</small></span>
             <input id="screen-file" type="file" accept="image/*" hidden>
           </div>
-          <div id="screen-move" class="screen-move" hidden><span class="hint" data-i18n="screenDragHint"></span><button id="screen-center" type="button" class="small-btn" data-i18n="screenCenter" disabled></button></div>
+          <div id="screen-move" class="screen-move" hidden><span class="hint" data-i18n="screenDragHint">Kéo để chỉnh vị trí (hoặc phím mũi tên), bấm để đổi ảnh</span><button id="screen-center" type="button" class="small-btn" data-i18n="screenCenter" disabled>Căn giữa</button></div>
           <div id="gif-controls" class="row" hidden>
             <button id="gif-play" type="button"></button>
-            <label class="inline grow"><span data-i18n="gifFrame"></span> <input id="gif-frame" type="range" min="0" max="0" value="0"> <output id="gif-frame-out"></output></label>
+            <label class="inline grow"><span data-i18n="gifFrame">Khung hình</span> <input id="gif-frame" type="range" min="0" max="0" value="0"> <output id="gif-frame-out"></output></label>
           </div>
           </div>
           <div class="screen-right">
             <div class="screen-grid">
-              <select id="screen-fit" data-i18n-title="screenFit" aria-label="Fit"><option value="cover" data-i18n="fitCover"></option><option value="contain" data-i18n="fitContain"></option></select>
+              <select id="screen-fit" data-i18n-title="screenFit" aria-label="Fit"><option value="cover" data-i18n="fitCover">Lấp đầy màn hình (cắt bớt)</option><option value="contain" data-i18n="fitContain">Vừa khít (có viền đen)</option></select>
             </div>
             <p id="screen-name" class="hint"></p>
             <div id="screen-device" class="apply-box" hidden>
-              <label id="screen-slot-box" class="slot-row"><span data-i18n="screenSlot"></span><select id="screen-slot"></select></label>
+              <label id="screen-slot-box" class="slot-row"><span data-i18n="screenSlot">Lớp ảnh tĩnh</span><select id="screen-slot"></select></label>
               <div class="screen-grid">
-                <button id="screen-send" type="button" class="primary" data-i18n="screenSend" disabled data-i18n-title="screenSendTitle"></button>
-                <button id="screen-clear-all" type="button" class="danger" data-i18n="screenClearAll" data-i18n-title="screenClearAllTitle" hidden></button>
+                <button id="screen-send" type="button" class="primary" data-i18n="screenSend" disabled data-i18n-title="screenSendTitle">Áp dụng lên màn hình</button>
+                <button id="screen-clear-all" type="button" class="danger" data-i18n="screenClearAll" data-i18n-title="screenClearAllTitle" hidden>Xoá ảnh trên phím</button>
               </div>
-              <p id="screen-device-note" class="hint" data-i18n="screenDeviceNote"></p>
-              <p id="screen-size-note" class="hint" data-i18n="screenSizeAssumed" hidden></p>
+              <p id="screen-device-note" class="hint" data-i18n="screenDeviceNote">Gửi xong, nhấn phím chuyển màn trên bàn phím để xem.</p>
+              <p id="screen-size-note" class="hint" data-i18n="screenSizeAssumed" hidden>NJ81-ED: ảnh tĩnh được gửi ở cỡ 160×80 vào ảnh thứ nhất và nằm trong vòng chuyển màn của bàn phím; nút “Xoá ảnh và GIF” gỡ chúng ra. GIF: tạm thời gửi khung đang hiện thành ảnh tĩnh, ảnh động sẽ có khi đọc xong cách driver Keydous gửi GIF.</p>
             </div>
           </div>
           <div class="screen-gallery">
-            <h3 data-i18n="gallery"></h3>
+            <h3 data-i18n="gallery">Thư viện ảnh cho màn hình</h3>
             <div id="gallery" class="gallery"></div>
           </div>
         </div>
         <div class="gallery-box">
-          <h3 data-i18n="gifIdeas"></h3>
-          <p class="hint" data-i18n="gifTips"></p>
+          <h3 data-i18n="gifIdeas">Gợi ý ảnh và GIF cho NJ81</h3>
+          <p class="hint" data-i18n="gifTips">Nên chọn ảnh ngang tỉ lệ 2:1 (160×80), ít chi tiết, nét to, nền tối. GIF chạy đúng tốc độ của nó (tối đa 50 khung; GIF ngắn tải lên nhanh hơn). Kiểm tra giấy phép trước khi dùng ảnh của người khác.</p>
           <div id="gallery-links" class="link-groups"></div>
         </div>
-        <p id="screen-connect-note" class="hint" data-i18n="screenNote"></p>
+        <p id="screen-connect-note" class="hint" data-i18n="screenNote">Ảnh được xem trước ở đúng kích thước màn hình NJ81 (160×80). Kết nối bàn phím bằng cáp để gửi ảnh và đồng bộ giờ.</p>
       </section>
     </div>
 
     <!-- Profile -->
     <div id="tab-profile" class="tab needs-keyboard" hidden>
       <section id="profile-card" class="panel narrow" aria-labelledby="h-profile">
-        <h2 id="h-profile" data-i18n="profile"></h2>
+        <h2 id="h-profile" data-i18n="profile">Hồ sơ</h2>
         <label class="field">
-          <span class="label" data-i18n="profileName"></span>
+          <span class="label" data-i18n="profileName">Tên hồ sơ</span>
           <input id="profile-name" type="text" maxlength="60" value="My profile">
         </label>
         <div class="row">
-          <button id="save-local" type="button" data-i18n="saveLocal"></button>
+          <button id="save-local" type="button" data-i18n="saveLocal">Lưu vào trình duyệt</button>
           <select id="saved-list" aria-label="Saved profiles"></select>
-          <button id="load-local" type="button" data-i18n="load"></button>
+          <button id="load-local" type="button" data-i18n="load">Nạp</button>
         </div>
         <div class="row">
-          <button id="export-json" type="button" data-i18n="exportJson"></button>
-          <label class="file-button"><span data-i18n="importJson"></span><input id="import-json" type="file" accept="application/json,.json"></label>
+          <button id="export-json" type="button" data-i18n="exportJson">Xuất JSON</button>
+          <label class="file-button"><span data-i18n="importJson">Nhập JSON</span><input id="import-json" type="file" accept="application/json,.json"></label>
         </div>
-        <div class="row"><button id="apply" type="button" class="primary" data-i18n="apply"></button></div>
+        <div class="row"><button id="apply" type="button" class="primary" data-i18n="apply">Áp dụng lên bàn phím</button></div>
       </section>
     </div>
 
@@ -343,30 +343,30 @@
       <section class="panel narrow macro-editor" aria-label="Macro">
         <div class="kmacro-top">
           <select id="macro-slot" aria-label="Macro"></select>
-          <button id="macro-load" type="button" data-i18n="macroLoad"></button>
-          <button id="macro-record" type="button" data-i18n="macroRecord"></button>
-          <button id="macro-clear" type="button" data-i18n="macroClear"></button>
+          <button id="macro-load" type="button" data-i18n="macroLoad">Đọc từ phím</button>
+          <button id="macro-record" type="button" data-i18n="macroRecord">Ghi macro</button>
+          <button id="macro-clear" type="button" data-i18n="macroClear">Xoá</button>
         </div>
         <div id="macro-events" class="macro-events"></div>
-        <p class="hint" data-i18n="macroHelp"></p>
-        <div class="row"><button id="macro-save" type="button" class="primary" data-i18n="macroSave"></button></div>
+        <p class="hint" data-i18n="macroHelp">Chọn ô macro, bấm “Ghi macro” rồi gõ các phím trên bàn phím; thời gian giữa các phím được giữ nguyên. Bấm “Lưu macro xuống phím” để ghi vào ô đó. Gán macro cho phím ở tab Phím, mục Macro.</p>
+        <div class="row"><button id="macro-save" type="button" class="primary" data-i18n="macroSave">Lưu macro xuống phím</button></div>
       </section>
     </div>
 
     <!-- Share: what Keydous users share in the official driver (read from the same servers) -->
     <div id="tab-share" class="tab needs-keyboard" hidden>
       <section class="panel share-panel" aria-label="Library">
-        <div id="share-loading" class="panel-loading" hidden><div class="spinner"></div><span data-i18n="shareLoading"></span></div>
+        <div id="share-loading" class="panel-loading" hidden><div class="spinner"></div><span data-i18n="shareLoading">Đang tải…</span></div>
         <div class="chips" role="group" aria-label="Share">
-          <button type="button" data-share-view="images" aria-pressed="true" data-i18n="shareImages"></button>
-          <button type="button" data-share-view="configs" aria-pressed="false" data-i18n="shareConfigs"></button>
+          <button type="button" data-share-view="images" aria-pressed="true" data-i18n="shareImages">Ảnh / GIF</button>
+          <button type="button" data-share-view="configs" aria-pressed="false" data-i18n="shareConfigs">Cấu hình NJ81-ED</button>
         </div>
-        <p class="hint" data-i18n="shareNote"></p>
+        <p class="hint" data-i18n="shareNote">Chỉ đọc, không cần tài khoản. Ảnh và GIF: của mọi bàn phím. Cấu hình (đèn + phím): chỉ những cấu hình chia sẻ từ NJ81-ED.</p>
         <div id="share-images-box">
           <div class="share-bar">
             <div id="share-img-order" class="seg" role="tablist" aria-label="Order">
-              <button type="button" role="tab" data-order="new" data-i18n="shareNewest"></button>
-              <button type="button" role="tab" data-order="top" data-i18n="sharePopular"></button>
+              <button type="button" role="tab" data-order="new" data-i18n="shareNewest">Mới nhất</button>
+              <button type="button" role="tab" data-order="top" data-i18n="sharePopular">Nổi bật</button>
             </div>
             <span id="share-img-state" class="hint"></span>
           </div>
@@ -376,10 +376,10 @@
         <div id="share-configs-box" hidden>
           <div class="share-bar">
             <div id="share-cfg-order" class="seg" role="tablist" aria-label="Order">
-              <button type="button" role="tab" data-order="time" data-i18n="shareNewest"></button>
-              <button type="button" role="tab" data-order="count" data-i18n="shareMostDownloaded"></button>
+              <button type="button" role="tab" data-order="time" data-i18n="shareNewest">Mới nhất</button>
+              <button type="button" role="tab" data-order="count" data-i18n="shareMostDownloaded">Nhiều lượt tải</button>
             </div>
-            <button id="share-cfg-refresh" type="button" class="small-btn" data-i18n="shareRefresh"></button>
+            <button id="share-cfg-refresh" type="button" class="small-btn" data-i18n="shareRefresh">Tìm cấu hình mới</button>
             <span id="share-cfg-state" class="hint"></span>
           </div>
           <div id="share-configs" class="share-configs"></div>
@@ -391,7 +391,7 @@
     <!-- Log -->
     <div id="tab-log" class="tab" hidden>
       <section class="panel" aria-labelledby="h-log">
-        <div class="panel-head"><h2 id="h-log" data-i18n="log"></h2><button type="button" class="small-btn clear-log" data-i18n="clearLog"></button></div>
+        <div class="panel-head"><h2 id="h-log" data-i18n="log">Nhật ký</h2><button type="button" class="small-btn clear-log" data-i18n="clearLog">Xoá nhật ký</button></div>
         <div id="log" class="log" aria-live="polite"></div>
       </section>
     </div>
@@ -409,8 +409,8 @@
     <h2 id="preview-title"></h2>
     <p id="preview-meta"></p>
     <div class="modal-actions">
-      <button type="submit" value="cancel" data-i18n="modalClose"></button>
-      <button type="button" id="preview-use" class="primary" data-i18n="shareUsePicture"></button>
+      <button type="submit" value="cancel" data-i18n="modalClose">Đóng</button>
+      <button type="button" id="preview-use" class="primary" data-i18n="shareUsePicture">Dùng ảnh này</button>
     </div>
   </form>
 </dialog>
@@ -419,7 +419,7 @@
     <h2 id="apply-title"></h2>
     <p id="apply-text"></p>
     <div class="apply-progress"><progress id="apply-bar" value="0" max="100"></progress><output id="apply-percent">0%</output></div>
-    <div class="modal-actions"><button type="button" id="apply-close" data-i18n="modalClose" hidden></button></div>
+    <div class="modal-actions"><button type="button" id="apply-close" data-i18n="modalClose" hidden>Đóng</button></div>
   </div>
 </dialog>
 <dialog id="confirm-dialog" class="modal" aria-labelledby="confirm-title" aria-describedby="confirm-text">
@@ -427,7 +427,7 @@
     <h2 id="confirm-title"></h2>
     <p id="confirm-text"></p>
     <div class="modal-actions">
-      <button type="submit" value="cancel" id="confirm-cancel" data-i18n="modalCancel"></button>
+      <button type="submit" value="cancel" id="confirm-cancel" data-i18n="modalCancel">Huỷ</button>
       <button type="submit" value="ok" id="confirm-ok" class="primary"></button>
     </div>
   </form>
