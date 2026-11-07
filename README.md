@@ -49,6 +49,12 @@ npm start
 
 Open **<http://localhost:8080>**. Use `localhost`, not `127.0.0.1`: WebHID needs HTTPS or `localhost`.
 
+If port 8080 is busy, `npm start` handles it:
+
+- **The app is already running there:** it prints the address and starts nothing new, so you keep using the same page.
+- **Another program holds 8080:** it starts on the next free port (8081–8089) and warns you. The browser keeps saved
+  profiles, pictures and the keyboard permission per address, so data saved at `:8080` is not visible on the new port.
+
 ## Connecting the keyboard
 
 1. Plug the keyboard in with the **USB-C cable** (Bluetooth and the 2.4 GHz dongle cannot be configured).
@@ -63,7 +69,7 @@ All settings are environment variables and all are optional.
 
 | Variable | Default | Purpose |
 |---|---|---|
-| `PORT` | `8080` | Port to listen on. Set by the host when deployed. |
+| `PORT` | `8080` | Port to listen on. Set by the host when deployed. If set, only that port is used. |
 | `HOST` | `localhost` (`0.0.0.0` on Render) | Address to listen on. Use `0.0.0.0` on hosts other than Render. |
 | `KEEPALIVE` | on when deployed | `0` turns the keep-alive ping off. |
 | `KEEPALIVE_MINUTES` | `10` | Minutes between keep-alive pings. |
@@ -141,7 +147,8 @@ npm test      # node --test: protocol, keys and macros, lighting, profiles, tran
 |---|---|
 | The keyboard is not in the list | Use the USB-C cable, close the official driver, then press *Show all devices*. |
 | "Keyboard did not take the command" | Close other tabs or programs using the keyboard. It may also be busy saving: wait a second and retry. |
-| `Port 8080 is already in use` | Another copy of the server is running. Stop it with `Ctrl+C`. To find it, run `Get-Process -Id (Get-NetTCPConnection -LocalPort 8080 -State Listen).OwningProcess` (PowerShell) or `lsof -i :8080` (macOS / Linux). |
+| `Port 8080 is used by another program, so this runs on 8081` | Close that program to get `:8080` back. Find it with `Get-Process -Id (Get-NetTCPConnection -LocalPort 8080 -State Listen).OwningProcess` (PowerShell) or `lsof -i :8080` (macOS / Linux). |
+| `NJ81 Config is already running` | Nothing is wrong: open the address it prints. |
 | The Library shows a notice | The page is served without `server.mjs`. Run `npm start` or deploy the web service. |
 | The live site is slow on the first visit | The free instance was asleep. The next visits are fast. |
 
