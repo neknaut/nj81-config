@@ -503,13 +503,31 @@ const showLastPicture = async () => {
   $("screen-name").textContent = last ? `${t("lastPictureSent")} ${new Date(last.at).toLocaleString()}${last.name ? ` · ${last.name}` : ""}` : t("noPictureSent");
 };
 
+/* The page's own confirm dialog: { title, text, ok, danger } -> true when confirmed. Esc, the backdrop and Cancel say no;
+   focus starts on Cancel for a dangerous action, on the action otherwise. */
+const confirmModal = ({ title, text, ok, danger = false }) => new Promise((resolve) => {
+  const dialog = $("confirm-dialog");
+  $("confirm-title").textContent = title;
+  $("confirm-text").textContent = text;
+  $("confirm-ok").textContent = ok;
+  $("confirm-ok").classList.toggle("danger", danger);
+  $("confirm-ok").classList.toggle("primary", !danger);
+  const done = () => { dialog.removeEventListener("close", done); dialog.removeEventListener("click", backdrop); resolve(dialog.returnValue === "ok"); };
+  const backdrop = (event) => { if (event.target === dialog) { dialog.close("cancel"); } };   // a click outside the box
+  dialog.returnValue = "cancel";
+  dialog.addEventListener("close", done);
+  dialog.addEventListener("click", backdrop);
+  dialog.showModal();
+  (danger ? $("confirm-cancel") : $("confirm-ok")).focus();
+});
+
 /* "Clear pictures and GIFs" (NJ81-ED): the official driver's Clear, copied from a USB capture. The keyboard is left alone
    while it clears (about a minute): the lighting watch and the clock skip while screenBusy is set, and the client queues
    any lighting change until it is done. */
 let screenBusy = false;
 const clearScreenAll = async () => {
   if (!nj?.display || nj.client.family !== "yc500") { return; }
-  if (!window.confirm(t("clearAllConfirm"))) { return; }
+  if (!(await confirmModal({ title: t("clearAllTitle"), text: t("clearAllConfirm"), ok: t("clearAllOk"), danger: true }))) { return; }
   stopGif();
   $("screen-clear-all").disabled = true;
   screenBusy = true;
@@ -688,7 +706,7 @@ const showTab = (tab) => {
     const panel = $(`tab-${name}`);
     panel.hidden = name !== tab || (panel.classList.contains("needs-keyboard") && !ready);
   }
-  $("start-hint").hidden = ready || tab === "log" || tab === "guide" || tab === "share";
+  $("start-hint").hidden = ready || tab === "log" || tab === "guide";
   $("page-title").dataset.i18n = waiting ? "connection" : TAB_TITLE[tab];
   $("page-title").textContent = t($("page-title").dataset.i18n);
   $("page-sub").dataset.i18n = waiting ? "connectionHelp" : TAB_SUB[tab];
@@ -1196,7 +1214,7 @@ const init = () => {
     },
     applyKeys: async (list, name, fnLayer) => {
       if (!nj) { logWarn("areaShare", t("screenNeedsKeyboard")); return; }
-      if (!window.confirm(`${t(fnLayer ? "shareKeysConfirmFn" : "shareKeysConfirm")} (${list.length})`)) { return; }
+      if (!(await confirmModal({ title: `${name} · ${list.length} ${t("shareKeysCount")}`, text: t(fnLayer ? "shareKeysConfirmFn" : "shareKeysConfirm"), ok: t("shareApplyKeys") }))) { return; }
       await keys.applyShared(list, name, fnLayer);
     },
     describeLight: (light) => describeNj(light),

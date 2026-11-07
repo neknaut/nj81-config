@@ -324,3 +324,17 @@ input[type="range"] { accent-color: var(--accent); }
 .share-card { content-visibility: auto; contain-intrinsic-size: auto 220px; }
 /* "Reduce motion": no fades or smooth scrolls (the keyboard drawing also slows to 10 frames a second) */
 @media (prefers-reduced-motion: reduce) { html { scroll-behavior: auto; } .app-loading, .share-grid { transition: none; } }
+
+/* The page's confirm dialog */
+.modal { padding: 0; border: 1px solid var(--line-2); border-radius: 16px; background: var(--panel); color: var(--ink); width: min(440px, calc(100vw - 32px)); box-shadow: 0 20px 60px rgba(0, 0, 0, 0.5); }
+.modal::backdrop { background: rgba(5, 7, 10, 0.65); backdrop-filter: blur(2px); }
+.modal[open] { animation: modal-in 0.14s ease-out; }
+@keyframes modal-in { from { opacity: 0; transform: translateY(6px) scale(0.98); } to { opacity: 1; transform: none; } }
+@media (prefers-reduced-motion: reduce) { .modal[open] { animation: none; } }
+.modal-box { display: flex; flex-direction: column; gap: 12px; padding: 22px; margin: 0; }
+.modal-box h2 { font-size: 17px; margin: 0; }
+.modal-box p { margin: 0; color: var(--muted); font-size: 14px; line-height: 1.55; }
+.modal-actions { display: flex; justify-content: flex-end; gap: 10px; margin-top: 6px; flex-wrap: wrap; }
+.modal-actions button { min-width: 96px; }
+button.danger { background: #d9433b; border-color: #d9433b; color: #fff; }
+button.danger:hover { background: #c23a33; }

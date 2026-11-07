@@ -300,7 +300,7 @@
     </div>
 
     <!-- Share: what Keydous users share in the official driver (read from the same servers) -->
-    <div id="tab-share" class="tab" hidden>
+    <div id="tab-share" class="tab needs-keyboard" hidden>
       <section class="panel share-panel" aria-label="Library">
         <div id="share-loading" class="panel-loading" hidden><div class="spinner"></div><span data-i18n="shareLoading"></span></div>
         <div class="chips" role="group" aria-label="Share">
@@ -342,6 +342,17 @@
     </div>
   </main>
 </div>
+<!-- The page's own confirm dialog (instead of the browser's window.confirm) -->
+<dialog id="confirm-dialog" class="modal" aria-labelledby="confirm-title" aria-describedby="confirm-text">
+  <form method="dialog" class="modal-box">
+    <h2 id="confirm-title"></h2>
+    <p id="confirm-text"></p>
+    <div class="modal-actions">
+      <button type="submit" value="cancel" id="confirm-cancel" data-i18n="modalCancel"></button>
+      <button type="submit" value="ok" id="confirm-ok" class="primary"></button>
+    </div>
+  </form>
+</dialog>
 <script type="module" src="js/app.js"></script>
 </body>
 </html>
