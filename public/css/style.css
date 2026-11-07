@@ -391,6 +391,11 @@ button.danger:hover { background: #c23a33; }
 #preview-title { overflow-wrap: anywhere; }
 .screen-move[hidden] { display: none; }
 .screen-grid > :only-child { grid-column: 1 / -1; }
+/* Before connecting: what the app does (also what search engines read) */
+.start-about { margin-top: 18px; padding-top: 16px; border-top: 1px solid var(--line); text-align: left; max-width: 620px; margin-left: auto; margin-right: auto; }
+.start-about h2 { font-size: 15px; margin: 0 0 6px; }
+.start-about p { margin: 0 0 8px; }
+.start-about ul { margin: 0; padding-left: 20px; color: var(--muted); font-size: 14px; line-height: 1.6; }
 /* A modal open: the page behind stays still */
 html { scrollbar-gutter: stable; }   /* no jump when the scrollbar goes away under a modal */
 html:has(dialog[open]) { overflow: hidden; }

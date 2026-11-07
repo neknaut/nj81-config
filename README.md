@@ -34,7 +34,8 @@ library of shared pictures and settings. No driver to install.
 | **Library** | Browse what Keydous users share (every picture and GIF, and NJ81-ED settings), open a picture big, and apply it in one click. |
 | **Log**, **Guide** | A log per connection and a guide to every feature. |
 
-Tested on a real **NJ81-ED**. Other NJ81 models (CP, MAX, S) are recognised and get lighting, clock and still pictures.
+Tested on a real **NJ81-ED**. The gen2 boards (NJ81-CP, CP V3, MAX, MAX CP) get lighting, clock, pictures and GIFs from
+public protocol notes, not tested on a real board; other NJ81 models are recognised and asked which command set they speak.
 
 ## Quick start
 
@@ -46,7 +47,8 @@ cd nj81-config
 npm start
 ```
 
-Open **<http://localhost:8080>**. Use `localhost`, not `127.0.0.1`: WebHID needs HTTPS or `localhost`.
+Open **<http://localhost:8080>**. Use `localhost`, not `127.0.0.1`: the browser keeps saved profiles and the keyboard
+permission per address.
 
 If port 8080 is busy, `npm start` handles it:
 
@@ -58,9 +60,10 @@ If port 8080 is busy, `npm start` handles it:
 
 1. Plug the keyboard in with the **USB-C cable** (Bluetooth and the 2.4 GHz dongle cannot be configured).
 2. **Close the official Keydous driver** and any other tab with this page: only one program can talk to the keyboard.
-3. Press **Connect keyboard** and pick the NJ81. Not listed? Press *Show all devices*.
+3. Press **Connect keyboard** and pick the NJ81. Not listed? Press *Keyboard not listed? Show all devices*.
 
-The page reconnects by itself next time until you press **Disconnect**.
+The page reconnects by itself next time until you press **Disconnect**. Once connected it opens on Lighting; F5 keeps the
+tab that was open.
 
 ## Deployment
 
@@ -76,6 +79,11 @@ Deploy the whole app with **`server.mjs`**, not only the `public/` folder: the L
 Free instances sleep after 15 minutes without traffic. The server pings its own `/keydous/ping` every 10 minutes to stay
 awake. Render's free plan has **750 instance hours per month for the whole workspace**: one always-on service uses about
 720, so do not keep two free services awake at once.
+
+Search engines get a full title and description, Open Graph / X cards with [`public/og.png`](public/og.png),
+JSON-LD, [`robots.txt`](public/robots.txt) and [`sitemap.xml`](public/sitemap.xml) (they name `nj81-config.onrender.com`:
+change them for another address). To be found sooner, add the site in
+[Google Search Console](https://search.google.com/search-console) and submit `/sitemap.xml`.
 
 > A service created earlier as a **Static Site** cannot run `server.mjs`. Delete it and create a **Web Service** (or the
 > Blueprint) instead.
@@ -93,15 +101,16 @@ Start it with `npm start` (or `node server.mjs`) behind HTTPS. It uses the port 
 - **Library.** The Keydous servers only answer browser pages opened at exactly `http://localhost:8080` (their CORS rule).
   So `server.mjs` makes the Library's three requests itself under `/keydous/*`: the picture list, picture files and the
   settings list. It is not an open proxy: request bodies are validated, at most 4 requests run at once and each visitor
-  is limited to 120 a minute. Without `server.mjs` the Library shows a notice instead.
+  is limited to 120 lists and 900 picture files a minute. Only whole picture files are sent and kept. Without `server.mjs`
+  the Library shows a notice instead.
 - **No build.** Plain ES modules, no framework and no dependencies.
 
 ## Safety
 
 The project contains **no firmware, bootloader, erase or factory-reset command**, and `packet()` refuses those opcodes.
 The one exception is **Clear keyboard pictures** (Screen tab, NJ81-ED only). It sends the official driver's own Clear
-command (`AC 00 00 00 00 00 00 53`), copied byte for byte from a USB capture, and then leaves the keyboard alone for about a
-minute while it clears.
+command (`AC 00 00 00 00 00 00 53`), copied byte for byte from a USB capture, and then leaves the keyboard alone until it
+reports the clear done (about 40 seconds).
 
 ## Development
 
@@ -121,6 +130,7 @@ npm test      # node --test: protocol, keys and macros, lighting, profiles, tran
 | [`public/js/hid.js`](public/js/hid.js) | WebHID connection |
 | [`public/js/lighting-nj81.js`](public/js/lighting-nj81.js), [`layout.js`](public/js/layout.js) | The keyboard drawing and its effects |
 | [`public/js/i18n.js`](public/js/i18n.js), [`guide.js`](public/js/guide.js), [`gallery.js`](public/js/gallery.js) | Translations, the Guide tab, built-in pictures |
+| [`scripts/og-image.mjs`](scripts/og-image.mjs) | Draws `public/og.png`, the picture shown with a shared link (`node scripts/og-image.mjs`) |
 | [`docs/`](docs) | [Protocol notes](docs/protocol-notes.md), [capturing the official driver](docs/capturing-usb.md) |
 | [`tests/`](tests) | Unit tests |
 
@@ -128,12 +138,11 @@ npm test      # node --test: protocol, keys and macros, lighting, profiles, tran
 
 | Problem | Fix |
 |---|---|
-| The keyboard is not in the list | Use the USB-C cable, close the official driver, then press *Show all devices*. |
-| "Keyboard did not take the command" | Close other tabs or programs using the keyboard. It may also be busy saving: wait a second and retry. |
-| `Port 8080 is used by another program, so this runs on 8081` | Close that program to get `:8080` back. Find it with `Get-Process -Id (Get-NetTCPConnection -LocalPort 8080 -State Listen).OwningProcess` (PowerShell) or `lsof -i :8080` (macOS / Linux). |
-| `NJ81 Config is already running` | Nothing is wrong: open the address it prints. |
+| The keyboard is not in the list | Use the USB-C cable, close the official driver, then press *Keyboard not listed? Show all devices*. |
+| Connected, but no tabs: "The keyboard did not answer the Keydous protocol" | Another tab with this page or the official driver has the keyboard. Close them, then *Disconnect* and connect again. |
+| "The keyboard did not take the transfer" | The same: close other tabs or programs using the keyboard. It may also be busy saving: wait a second and retry. |
+| `Port 8080 is used by another program, so this runs on 8081` | Close that program (the server prints the command that finds it) and run `npm start` again. |
 | The Library shows a notice | The page is served without `server.mjs`. Run `npm start` or deploy the web service. |
-| The live site is slow on the first visit | The free instance was asleep. The next visits are fast. |
 
 ## License
 

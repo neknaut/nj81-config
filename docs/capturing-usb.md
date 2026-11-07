@@ -1,7 +1,7 @@
 # Capturing the official driver's USB traffic
 
-The NJ81's protocol is in `public/js/royuan.js`. For a model or a feature that is not on file yet (for example the NJ81-ED's
-screen), its commands can be learned from the official Keydous driver. This page shows how to record them. **You only record traffic between your own keyboard and your own PC.** Nothing here writes firmware.
+The NJ81's protocol is in `public/js/royuan.js`. For a model or a feature that is not on file yet, its commands can be learned
+from the official Keydous driver (the NJ81-ED's screen Clear was learned this way). This page shows how to record them. **You only record traffic between your own keyboard and your own PC.** Nothing here writes firmware.
 
 ## What you need
 

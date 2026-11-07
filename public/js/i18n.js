@@ -1,7 +1,6 @@
 /* Two languages, Vietnamese first. Elements with data-i18n get their text, data-i18n-placeholder / data-i18n-title their attributes. */
 const TEXT = {
   vi: {
-    title: "NJ81 Config",
     notSupported: "Trình duyệt này không có WebHID. Dùng Chrome hoặc Edge trên máy tính (HTTPS hoặc localhost).",
     connection: "Kết nối",
     connect: "Kết nối bàn phím",
@@ -138,7 +137,14 @@ const TEXT = {
     subScreen: "Ảnh tĩnh 160×80 cho màn hình của bàn phím, thư viện ảnh và GIF.",
     subProfile: "Lưu, nạp, xuất và nhập cấu hình.",
     subLog: "Mọi việc web đã làm và bàn phím đã trả lời.",
+    pageTitle: "NJ81 Config · Phần mềm cấu hình Keydous NJ81 trên web: đèn, phím, macro, GIF màn hình",
     startTitle: "Kết nối bàn phím để bắt đầu",
+    aboutTitle: "NJ81 Config làm được gì",
+    aboutText: "Phần mềm cấu hình miễn phí, không chính thức cho bàn phím Keydous NJ81 (đã thử trên NJ81-ED), chạy ngay trên Chrome hoặc Edge, không cần cài driver.",
+    aboutLight: "Đèn RGB: mọi hiệu ứng có sẵn, một màu hoặc cầu vồng, độ sáng, tốc độ và hướng.",
+    aboutKeys: "Đổi phím, phím media và chuột, lớp Fn và macro.",
+    aboutScreen: "Màn hình 160×80: ảnh và GIF của bạn, hiển thị nét, kéo chỉnh vị trí, gửi lên kèm % tiến độ.",
+    aboutLibrary: "Thư viện ảnh, GIF và cấu hình NJ81-ED do người dùng Keydous chia sẻ, áp dụng bằng một lần bấm.",
     startText: "Cắm NJ81 bằng cáp USB-C rồi bấm “Kết nối bàn phím”. Các tab (Đèn, Phím, Macro, Màn hình, Hồ sơ, Library, Nhật ký, Hướng dẫn) hiện ra khi web nhận ra bàn phím. Không thấy bàn phím trong danh sách: dùng cáp (không dùng Bluetooth hay 2.4G), tắt driver Keydous và các tab khác đang mở trang này, rồi bấm “Không thấy bàn phím? Hiện mọi thiết bị”.",
     disconnectedByUser: "Đã ngắt kết nối. Tải lại trang vẫn giữ ngắt, bấm 'Kết nối bàn phím' để nối lại.",
     reactiveNote: "chỉ sáng khi gõ phím",
@@ -242,7 +248,6 @@ const TEXT = {
     footer: "Dự án không liên kết với Keydous. Không có lệnh firmware trong mã nguồn.",
   },
   en: {
-    title: "NJ81 Config",
     notSupported: "This browser has no WebHID. Use Chrome or Edge on a computer (HTTPS or localhost).",
     connection: "Connection",
     connect: "Connect keyboard",
@@ -379,7 +384,14 @@ const TEXT = {
     subScreen: "160×80 still pictures for the keyboard screen, picture library and GIFs.",
     subProfile: "Save, load, export and import settings.",
     subLog: "Everything the page did and what the keyboard answered.",
+    pageTitle: "NJ81 Config · Keydous NJ81 web configurator: lighting, keys, macros, screen GIF",
     startTitle: "Connect the keyboard to start",
+    aboutTitle: "What NJ81 Config does",
+    aboutText: "A free, unofficial configurator for the Keydous NJ81 keyboard (tested on the NJ81-ED) that runs in Chrome or Edge, with no driver to install.",
+    aboutLight: "RGB lighting: every built-in effect, colour or rainbow, brightness, speed and direction.",
+    aboutKeys: "Key remaps, media and mouse keys, the Fn layer and macros.",
+    aboutScreen: "The 160×80 screen: your own pictures and GIFs, sharp, moved into place, sent with a progress bar.",
+    aboutLibrary: "A library of pictures, GIFs and NJ81-ED settings shared by Keydous users, applied in one click.",
     startText: "Plug the NJ81 in with the USB-C cable and press “Connect keyboard”. The tabs (Lighting, Keys, Macro, Screen, Profile, Library, Log, Guide) appear once the keyboard is recognised. Not in the list: use the cable (not Bluetooth or 2.4G), close the Keydous driver and other tabs with this page, then press “Keyboard not listed? Show all devices”.",
     disconnectedByUser: "Disconnected. It stays that way after a reload; press 'Connect keyboard' to connect again.",
     reactiveNote: "lights on key presses",
@@ -497,7 +509,7 @@ export const setLanguage = (language, root = document) => {
   root.querySelectorAll("[data-i18n-placeholder]").forEach((el) => { el.placeholder = t(el.dataset.i18nPlaceholder); });
   root.querySelectorAll("[data-i18n-title]").forEach((el) => { el.title = t(el.dataset.i18nTitle); });
   root.querySelectorAll("[data-i18n-aria]").forEach((el) => { el.setAttribute("aria-label", t(el.dataset.i18nAria)); });
-  document.title = t("title");
+  document.title = t("pageTitle");
 };
 
 export const textKeys = (language) => Object.keys(TEXT[language] || {});
