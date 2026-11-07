@@ -237,8 +237,14 @@ export const initShare = (ctx) => {
   const fileOf = async (image, signal) => {
     const kept = files.get(image.md5);
     if (kept) { files.delete(image.md5); files.set(image.md5, kept); return kept; }   // most recent last
-    const response = await fetch(API.file + image.md5, { signal });
-    if (!response.ok) { throw new Error(`HTTP ${response.status}`); }
+    // a file that fails (server busy, too many at once, network) is asked again twice, a little later each time
+    let response = null;
+    for (let attempt = 0; attempt < 3; attempt += 1) {
+      if (attempt) { await pause(700 * attempt, signal); }
+      try { response = await fetch(API.file + image.md5, { signal }); } catch (error) { if (aborted(error)) { throw error; } response = null; }
+      if (response?.ok) { break; }
+    }
+    if (!response?.ok) { throw new Error(`HTTP ${response?.status ?? "-"}`); }
     const blob = await inflate(await response.arrayBuffer());
     const type = typeOf(image);
     const url = URL.createObjectURL(blob.type === type ? blob : new Blob([blob], { type }));
@@ -277,7 +283,12 @@ export const initShare = (ctx) => {
     if (kept) { return kept.promise; }
     const entry = { controller: new AbortController(), done: false };
     entry.promise = fetchPage(order, page, entry.controller.signal).then(
-      (data) => { entry.done = true; return data; },
+      (data) => {
+        entry.done = true;
+        // a page with a picture that could not be read is not kept: shown once, read again next time
+        if (data.items.some((it) => !it.file)) { queueMicrotask(() => { if (pages.get(key) === entry) { pages.delete(key); } }); }
+        return data;
+      },
       (error) => { if (pages.get(key) === entry) { pages.delete(key); } throw error; },
     );
     pages.set(key, entry);
