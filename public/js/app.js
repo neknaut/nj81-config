@@ -676,18 +676,23 @@ const showTab = (tab) => {
   showGuide();
   queueMicrotask(() => { keys?.onTab(tab, ready); if (tab === "share") { share?.onShow(); } else { share?.onHide(); } });
   $("keyboard-panel").hidden = !ready || !["light", "keys", "screen"].includes(tab);
+  /* Without a keyboard the tabs that need one are not in the sidebar (Library, Log and Guide stay); the tab asked for is
+     kept and comes back once a keyboard is connected. Meanwhile the page shows how to connect. */
+  const needsKeyboard = (name) => $(`tab-${name}`)?.classList.contains("needs-keyboard");
+  const waiting = !ready && needsKeyboard(tab);
   for (const button of document.querySelectorAll("[data-tab]")) {
-    if (button.dataset.tab === tab) { button.setAttribute("aria-current", "page"); } else { button.removeAttribute("aria-current"); }
+    button.hidden = !ready && needsKeyboard(button.dataset.tab);
+    if (button.dataset.tab === tab && !waiting) { button.setAttribute("aria-current", "page"); } else { button.removeAttribute("aria-current"); }
   }
   for (const name of Object.keys(TAB_SUB)) {
     const panel = $(`tab-${name}`);
     panel.hidden = name !== tab || (panel.classList.contains("needs-keyboard") && !ready);
   }
   $("start-hint").hidden = ready || tab === "log" || tab === "guide" || tab === "share";
-  $("page-title").dataset.i18n = TAB_TITLE[tab];
-  $("page-title").textContent = t(TAB_TITLE[tab]);
-  $("page-sub").dataset.i18n = TAB_SUB[tab];
-  $("page-sub").textContent = t(TAB_SUB[tab]);
+  $("page-title").dataset.i18n = waiting ? "connection" : TAB_TITLE[tab];
+  $("page-title").textContent = t($("page-title").dataset.i18n);
+  $("page-sub").dataset.i18n = waiting ? "connectionHelp" : TAB_SUB[tab];
+  $("page-sub").textContent = t($("page-sub").dataset.i18n);
 };
 const setControlsEnabled = (on) => {
   ready = on;
