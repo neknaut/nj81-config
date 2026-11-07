@@ -29,9 +29,9 @@ library of shared pictures and settings. No driver to install.
 | **Lighting** | Built-in effects, direction, colour or rainbow, brightness, speed, lights off. Every change is read back to confirm it, and changes made on the keyboard itself show up. |
 | **Keys** | Remap any key (with up to two modifiers), media and mouse actions, macros, the Fn layer; works like the official driver's main page. |
 | **Macro** | Record and store the keyboard's 8 macro slots. |
-| **Screen** | Send a picture or GIF (160×80) into one of 5 layers, clear pictures, sync the clock. |
+| **Screen** | Pick a picture or GIF in the preview (click or drop), drag it into place, send it (160×80) into one of 5 layers with a progress modal; clear pictures, sync the clock. |
 | **Profile** | Save lighting profiles in the browser; export and import JSON. |
-| **Library** | Browse what Keydous users share (every picture and GIF, and NJ81-ED settings) and apply it. |
+| **Library** | Browse what Keydous users share (every picture and GIF, and NJ81-ED settings), open a picture big, and apply it in one click. |
 | **Log**, **Guide** | A log per connection and a guide to every feature. |
 
 Tested on a real **NJ81-ED**. Other NJ81 models (CP, MAX, S) are recognised and get lighting, clock and still pictures.
@@ -117,6 +117,7 @@ npm test      # node --test: protocol, keys and macros, lighting, profiles, tran
 | [`public/js/app.js`](public/js/app.js) | Wires the page together: tabs, lighting, screen, profiles, loading |
 | [`public/js/keymap.js`](public/js/keymap.js), [`keys-ui.js`](public/js/keys-ui.js) | Key and macro encoding; the Keys and Macro tabs |
 | [`public/js/share.js`](public/js/share.js) | The Library tab |
+| [`public/js/sharp.js`](public/js/sharp.js) | Draws 160×80 pictures sharp at any size (whole-number enlargement, then smooth) |
 | [`public/js/hid.js`](public/js/hid.js) | WebHID connection |
 | [`public/js/lighting-nj81.js`](public/js/lighting-nj81.js), [`layout.js`](public/js/layout.js) | The keyboard drawing and its effects |
 | [`public/js/i18n.js`](public/js/i18n.js), [`guide.js`](public/js/guide.js), [`gallery.js`](public/js/gallery.js) | Translations, the Guide tab, built-in pictures |

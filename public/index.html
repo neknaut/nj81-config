@@ -23,6 +23,7 @@
   <link rel="modulepreload" href="js/i18n.js">
   <link rel="modulepreload" href="js/guide.js">
   <link rel="modulepreload" href="js/share.js">
+  <link rel="modulepreload" href="js/sharp.js">
 </head>
 <body>
 <div id="app-loading" class="app-loading" role="status" aria-live="polite"><div class="spinner"></div><span>NJ81 Config</span></div>
@@ -41,7 +42,7 @@
       <p id="device-info" class="device-text" hidden></p>
       <button id="connect" type="button" class="primary" data-i18n="connect"></button>
       <button id="connect-other" type="button" data-i18n="connectOther"></button>
-      <button id="disconnect" type="button" data-i18n="disconnect" hidden></button>
+      <button id="disconnect" type="button" class="danger" data-i18n="disconnect" hidden></button>
       <p id="connection-help" class="device-text" data-i18n="connectionHelp"></p>
     </section>
 
@@ -226,7 +227,13 @@
         <h2 id="h-screen" data-i18n="screen"></h2>
         <div class="screen-layout">
           <div class="screen-left">
-          <canvas id="screen-canvas" class="screen" width="160" height="80" aria-label="Screen preview"></canvas>
+          <canvas id="screen-canvas" width="160" height="80" hidden></canvas>
+          <div class="screen-frame">
+            <canvas id="screen-view" class="screen" tabindex="0" role="button" aria-label="Screen preview" data-i18n-title="screenPickTitle"></canvas>
+            <span id="screen-empty" class="screen-empty" aria-hidden="true"><b>+</b><span data-i18n="screenPick"></span><small data-i18n="screenPickHint"></small></span>
+            <input id="screen-file" type="file" accept="image/*" hidden>
+          </div>
+          <div id="screen-move" class="screen-move" hidden><span class="hint" data-i18n="screenDragHint"></span><button id="screen-center" type="button" class="small-btn" data-i18n="screenCenter" disabled></button></div>
           <div id="gif-controls" class="row" hidden>
             <button id="gif-play" type="button"></button>
             <label class="inline grow"><span data-i18n="gifFrame"></span> <input id="gif-frame" type="range" min="0" max="0" value="0"> <output id="gif-frame-out"></output></label>
@@ -234,17 +241,15 @@
           </div>
           <div class="screen-right">
             <div class="screen-grid">
-              <label class="file-button"><span data-i18n="screenPick"></span><input id="screen-file" type="file" accept="image/*"></label>
               <select id="screen-fit" data-i18n-title="screenFit" aria-label="Fit"><option value="cover" data-i18n="fitCover"></option><option value="contain" data-i18n="fitContain"></option></select>
             </div>
             <p id="screen-name" class="hint"></p>
             <div id="screen-device" class="apply-box" hidden>
               <label id="screen-slot-box" class="slot-row"><span data-i18n="screenSlot"></span><select id="screen-slot"></select></label>
               <div class="screen-grid">
-                <button id="screen-send" type="button" class="primary" data-i18n="screenSend" data-i18n-title="screenSendTitle"></button>
-                <button id="screen-clear-all" type="button" data-i18n="screenClearAll" data-i18n-title="screenClearAllTitle" hidden></button>
+                <button id="screen-send" type="button" class="primary" data-i18n="screenSend" disabled data-i18n-title="screenSendTitle"></button>
+                <button id="screen-clear-all" type="button" class="danger" data-i18n="screenClearAll" data-i18n-title="screenClearAllTitle" hidden></button>
               </div>
-              <progress id="screen-progress" hidden value="0" max="1"></progress>
               <p id="screen-device-note" class="hint" data-i18n="screenDeviceNote"></p>
               <p id="screen-size-note" class="hint" data-i18n="screenSizeAssumed" hidden></p>
             </div>
@@ -349,6 +354,25 @@
   </main>
 </div>
 <!-- The page's own confirm dialog (instead of the browser's window.confirm) -->
+<dialog id="share-preview" class="modal preview-modal" aria-labelledby="preview-title">
+  <form method="dialog" class="modal-box">
+    <div id="preview-shot" class="preview-shot"></div>
+    <h2 id="preview-title"></h2>
+    <p id="preview-meta"></p>
+    <div class="modal-actions">
+      <button type="submit" value="cancel" data-i18n="modalClose"></button>
+      <button type="button" id="preview-use" class="primary" data-i18n="shareUsePicture"></button>
+    </div>
+  </form>
+</dialog>
+<dialog id="apply-dialog" class="modal" aria-labelledby="apply-title" aria-describedby="apply-text">
+  <div class="modal-box">
+    <h2 id="apply-title"></h2>
+    <p id="apply-text"></p>
+    <div class="apply-progress"><progress id="apply-bar" value="0" max="100"></progress><output id="apply-percent">0%</output></div>
+    <div class="modal-actions"><button type="button" id="apply-close" data-i18n="modalClose" hidden></button></div>
+  </div>
+</dialog>
 <dialog id="confirm-dialog" class="modal" aria-labelledby="confirm-title" aria-describedby="confirm-text">
   <form method="dialog" class="modal-box">
     <h2 id="confirm-title"></h2>

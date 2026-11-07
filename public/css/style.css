@@ -88,7 +88,7 @@ select:hover { border-color: var(--accent); }
 select option { background: var(--panel); color: var(--ink); font-weight: 500; }
 .device button { width: 100%; }
 #connect-other { font-size: 13px; padding: 8px 12px; line-height: 1.3; }
-.device button:not(.primary) { background: transparent; }
+.device button:not(.primary):not(.danger) { background: transparent; }
 .check { display: flex; align-items: center; gap: 8px; font-size: 14px; font-weight: 500; cursor: pointer; }
 .check input { width: 18px; height: 18px; accent-color: var(--accent); }
 
@@ -311,7 +311,7 @@ input[type="range"] { accent-color: var(--accent); }
 .share-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(190px, 1fr)); gap: 12px; }
 .share-card { margin: 0; display: flex; flex-direction: column; gap: 8px; padding: 10px; border: 1px solid var(--line); border-radius: 12px; background: var(--raised); min-width: 0; }
 .share-shot { aspect-ratio: 2 / 1; background: #000; border-radius: 6px; overflow: hidden; display: grid; place-items: center; color: var(--dim); }
-.share-shot img { width: 100%; height: 100%; object-fit: contain; image-rendering: pixelated; }
+.share-shot canvas { display: block; width: 100%; height: 100%; }   /* drawn sharp by sharp.js, at the screen's own pixels */
 .share-meta { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
 .share-meta strong, .share-meta span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .share-meta span { font-size: 12px; color: var(--muted); }
@@ -341,13 +341,11 @@ input[type="range"] { accent-color: var(--accent); }
 /* A page on its way: grey cards of the real size; a picture not read yet: a moving grey in its place, then it fades in */
 .share-shot.loading { background: linear-gradient(100deg, var(--line) 30%, color-mix(in srgb, var(--line) 55%, var(--raised)) 50%, var(--line) 70%) 0 0 / 300% 100%; animation: shimmer 1.4s ease-in-out infinite; }
 @keyframes shimmer { from { background-position: 100% 0; } to { background-position: 0 0; } }
-.share-shot img { opacity: 0; transition: opacity 0.25s; }
-.share-shot img.in { opacity: 1; }
 .share-card.skeleton .share-meta i { display: block; height: 12px; margin: 2px 0; border-radius: 4px; background: var(--line); width: 70%; }
 .share-card.skeleton .share-meta i + i { width: 45%; height: 10px; }
 .share-card.skeleton .small-btn { border-color: transparent; background: var(--line); opacity: 0.6; }
 /* "Reduce motion": no fades or smooth scrolls (the keyboard drawing also slows to 10 frames a second) */
-@media (prefers-reduced-motion: reduce) { html { scroll-behavior: auto; } .app-loading, .share-shot img { transition: none; } .share-shot.loading { animation: none; } }
+@media (prefers-reduced-motion: reduce) { html { scroll-behavior: auto; } .app-loading { transition: none; } .share-shot.loading { animation: none; } }
 
 /* The page's confirm dialog */
 .modal { padding: 0; border: 1px solid var(--line-2); border-radius: 16px; background: var(--panel); color: var(--ink); width: min(440px, calc(100vw - 32px)); box-shadow: 0 20px 60px rgba(0, 0, 0, 0.5); }
@@ -362,3 +360,38 @@ input[type="range"] { accent-color: var(--accent); }
 .modal-actions button { min-width: 96px; }
 button.danger { background: #d9433b; border-color: #d9433b; color: #fff; }
 button.danger:hover { background: #c23a33; }
+
+/* Screen preview: drawn sharp (sharp.js). Click it to choose a picture (an empty one says so); a picture of another
+   shape can be dragged into place. */
+.screen-frame { position: relative; }
+.screen-frame .screen { cursor: pointer; }
+.screen-frame.empty .screen { border-style: dashed; border-color: var(--line-2, #3a4150); }
+.screen-frame.drop .screen { border-color: var(--accent); box-shadow: 0 0 0 3px rgba(143, 176, 255, 0.35); }
+.screen-empty { position: absolute; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 2px; pointer-events: none; color: var(--muted); font-size: 13px; font-weight: 600; text-align: center; padding: 8px; }
+.screen-empty[hidden] { display: none; }
+.screen-empty b { font-size: 26px; line-height: 1; color: var(--accent); font-weight: 500; }
+.screen-empty small { font-size: 11px; font-weight: 400; color: var(--dim, var(--muted)); }
+.screen-frame:hover .screen { border-color: var(--accent); }
+.screen.movable { cursor: grab; touch-action: none; user-select: none; }
+.screen.movable.dragging { cursor: grabbing; }
+.screen:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.screen-move { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+.screen-move .hint { margin: 0; font-size: 12px; }
+.screen-move .small-btn { flex: none; }
+.thumb canvas, .screen-tile { display: block; }
+/* Applying a picture from the Library: how far, in a modal */
+.apply-progress { display: flex; align-items: center; gap: 10px; }
+.apply-progress progress { flex: 1; height: 10px; }
+.apply-progress output { min-width: 3.5em; text-align: right; font-variant-numeric: tabular-nums; font-weight: 600; }
+/* Library: a picture opened big */
+.share-shot:has(canvas) { cursor: zoom-in; }
+.share-shot:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.preview-modal { width: min(720px, calc(100vw - 32px)); }
+.preview-shot { aspect-ratio: 2 / 1; background: #000; border-radius: 10px; overflow: hidden; }
+.preview-shot canvas { display: block; width: 100%; height: 100%; }
+#preview-title { overflow-wrap: anywhere; }
+.screen-move[hidden] { display: none; }
+.screen-grid > :only-child { grid-column: 1 / -1; }
+/* A modal open: the page behind stays still */
+html { scrollbar-gutter: stable; }   /* no jump when the scrollbar goes away under a modal */
+html:has(dialog[open]) { overflow: hidden; }
