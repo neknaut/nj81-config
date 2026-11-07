@@ -9,8 +9,8 @@ services:
     buildCommand: echo "no build"
     startCommand: node server.mjs
     healthCheckPath: /keydous/ping
+    # RENDER_EXTERNAL_URL and PORT are set by Render: server.mjs pings RENDER_EXTERNAL_URL every 10 min to stay awake.
+    # On Render (it sets RENDER) server.mjs listens on 0.0.0.0 by itself: no HOST to set.
     envVars:
-      - key: HOST
-        value: 0.0.0.0
       - key: NODE_VERSION
         value: "22"
