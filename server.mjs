@@ -39,21 +39,46 @@ const KEYDOUS = {
 };
 const FILE_URL = "https://api3.rongyuan.tech:3816/download/bit_image_file/";
 const UPSTREAM_AT_ONCE = 4;   // calls to Keydous at the same time, for every visitor together: more and it answers "busy"
-const PER_VISITOR = { calls: 120, perMs: 60_000 };   // a visitor may make this many /keydous calls a minute
+/* A visitor may make this many calls a minute: lists are few; a page of pictures is 12 files and the Library reads 3 pages
+   ahead, so files get more room (a page turned quickly must not run out and lose its pictures). */
+const PER_VISITOR = { lists: 120, files: 900, perMs: 60_000 };
+/* Files kept in memory (they never change: named by md5), up to FILE_CACHE_BYTES: a picture asked for again (another visitor,
+   another order) does not go to Keydous again. */
+const FILE_CACHE_BYTES = 40 * 1024 * 1024;
+const fileCache = new Map();   // md5 -> Buffer, least recently used first
+let fileCacheBytes = 0;
+const cacheFile = (md5, body) => {
+  fileCache.set(md5, body);
+  fileCacheBytes += body.length;
+  for (const [key, old] of fileCache) {
+    if (fileCacheBytes <= FILE_CACHE_BYTES) { break; }
+    fileCache.delete(key);
+    fileCacheBytes -= old.length;
+  }
+};
 const TIMEOUT_MS = 20_000;
 
+/* Calls to Keydous wait their turn here. A visitor who has gone (the browser cancelled: another page, another tab) leaves
+   the line at once, and a call already running for them is stopped: the next visitor's pictures are not held up by
+   pictures nobody waits for any more. */
 let running = 0;
-const queue = [];
-const slot = () => (running < UPSTREAM_AT_ONCE ? (running += 1, Promise.resolve()) : new Promise((go) => queue.push(go)));
-const release = () => { const next = queue.shift(); if (next) { next(); } else { running -= 1; } };
+const queue = [];   // { go, gone }
+const slot = (gone) => new Promise((go, fail) => {
+  if (gone.aborted) { fail(gone.reason); return; }
+  if (running < UPSTREAM_AT_ONCE) { running += 1; go(); return; }
+  const waiting = { go, gone };
+  queue.push(waiting);
+  gone.addEventListener("abort", () => { const i = queue.indexOf(waiting); if (i >= 0) { queue.splice(i, 1); fail(gone.reason); } }, { once: true });
+});
+const release = () => { const next = queue.shift(); if (next) { next.go(); } else { running -= 1; } };
 
 const visitors = new Map();   // address -> { count, since }
-const allowed = (address) => {
+const allowed = (address, kind) => {
   const now = Date.now();
-  const v = visitors.get(address);
-  if (!v || now - v.since > PER_VISITOR.perMs) { visitors.set(address, { count: 1, since: now }); return true; }
-  v.count += 1;
-  return v.count <= PER_VISITOR.calls;
+  let v = visitors.get(address);
+  if (!v || now - v.since > PER_VISITOR.perMs) { v = { lists: 0, files: 0, since: now }; visitors.set(address, v); }
+  v[kind] += 1;
+  return v[kind] <= PER_VISITOR[kind];
 };
 setInterval(() => { const now = Date.now(); for (const [a, v] of visitors) { if (now - v.since > PER_VISITOR.perMs) { visitors.delete(a); } } }, PER_VISITOR.perMs).unref();
 
@@ -78,9 +103,9 @@ const cleanBody = (text, fields) => {
   }
   return out;
 };
-const upstream = async (url, init) => {
-  await slot();
-  try { return await fetch(url, { ...init, signal: AbortSignal.timeout(TIMEOUT_MS), headers: { ...init?.headers, "User-Agent": "nj81-config" } }); }
+const upstream = async (url, init, gone) => {
+  await slot(gone);
+  try { return await fetch(url, { ...init, signal: AbortSignal.any([gone, AbortSignal.timeout(TIMEOUT_MS)]), headers: { ...init?.headers, "User-Agent": "nj81-config" } }); }
   finally { release(); }
 };
 const send = (response, status, body, headers = {}) => { response.writeHead(status, { ...SECURITY, ...headers }); response.end(body); };
@@ -88,21 +113,36 @@ const send = (response, status, body, headers = {}) => { response.writeHead(stat
 const keydous = async (request, response, path) => {
   // behind a host's proxy (Render) the visitor's address is the first of X-Forwarded-For
   const visitor = String(request.headers["x-forwarded-for"] ?? "").split(",")[0].trim() || request.socket.remoteAddress || "?";
-  if (!allowed(visitor)) { send(response, 429, JSON.stringify({ code: -1, err_message: "Too many requests" }), { "Content-Type": "application/json" }); return; }
   if (path === "/keydous/ping") { send(response, 204, undefined, { "Cache-Control": "no-store", "X-App": APP }); return; }
   const file = /^\/keydous\/file\/([0-9a-f]{32})$/.exec(path);
+  if (!allowed(visitor, file ? "files" : "lists")) { send(response, 429, JSON.stringify({ code: -1, err_message: "Too many requests" }), { "Content-Type": "application/json", "Retry-After": "5" }); return; }
+  const leaving = new AbortController();   // the browser cancelled or went away before the answer
+  response.on("close", () => { if (!response.writableEnded) { leaving.abort(); } });
+  const gone = leaving.signal;
+  // a file is named by its md5: it never changes, browsers may keep it a day
+  const fileHeaders = { "Content-Type": "application/octet-stream", "Cache-Control": "public, max-age=86400, immutable" };
   if (file && request.method === "GET") {
-    const answer = await upstream(FILE_URL + file[1]);
-    const body = Buffer.from(await answer.arrayBuffer());
-    // a file is named by its md5: it never changes, browsers may keep it a day
-    send(response, answer.status, body, { "Content-Type": "application/octet-stream", "Cache-Control": answer.ok ? "public, max-age=86400, immutable" : "no-store" });
+    const kept = fileCache.get(file[1]);
+    if (kept) { fileCache.delete(file[1]); fileCache.set(file[1], kept); send(response, 200, kept, fileHeaders); return; }
+    // Keydous sometimes answers a file with 400 / 5xx when asked many at once: asked again twice, a little later each time
+    let answer = null;
+    for (let attempt = 0; attempt < 3; attempt += 1) {
+      if (attempt) { await new Promise((wake) => { setTimeout(wake, 600 * attempt); }); }
+      if (gone.aborted) { throw gone.reason; }
+      answer = await upstream(FILE_URL + file[1], undefined, gone);
+      if (answer.ok) { break; }
+      await answer.arrayBuffer().catch(() => {});
+    }
+    const body = Buffer.from(await answer.arrayBuffer().catch(() => new ArrayBuffer(0)));
+    if (answer.ok) { cacheFile(file[1], body); }
+    send(response, answer.status, body, answer.ok ? fileHeaders : { "Content-Type": "application/octet-stream", "Cache-Control": "no-store" });
     return;
   }
   const call = KEYDOUS[path];
   if (!call || request.method !== "POST") { send(response, 404, "Not found", { "Content-Type": "text/plain; charset=utf-8" }); return; }
   let body;
   try { body = cleanBody(await readBody(request), call.fields); } catch (error) { send(response, 400, JSON.stringify({ code: -1, err_message: "Bad request" }), { "Content-Type": "application/json" }); return; }
-  const answer = await upstream(call.url, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
+  const answer = await upstream(call.url, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) }, gone);
   send(response, answer.status, await answer.text(), { "Content-Type": answer.headers.get("content-type") ?? "application/json", "Cache-Control": "no-store" });
 };
 
@@ -117,7 +157,7 @@ const server = createServer(async (request, response) => {
     const body = await readFile(file);
     send(response, 200, request.method === "HEAD" ? undefined : body, { "Content-Type": TYPES[extname(file).toLowerCase()] ?? "application/octet-stream", "Cache-Control": "no-cache" });
   } catch (error) {
-    if (response.headersSent) { response.destroy(); return; }
+    if (response.headersSent || response.destroyed || error.name === "AbortError") { if (!response.writableEnded) { response.destroy(); } return; }
     const missing = error.code === "ENOENT";
     const timeout = error.name === "TimeoutError";
     send(response, missing ? 404 : timeout ? 504 : 502, missing ? "Not found" : timeout ? "Keydous did not answer" : "Error", { "Content-Type": "text/plain; charset=utf-8" });
