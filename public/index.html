@@ -33,9 +33,11 @@
     <nav class="nav" aria-label="Menu">
       <button type="button" data-tab="light" data-i18n="lighting"></button>
       <button type="button" data-tab="keys" data-i18n="keysTab"></button>
+      <button type="button" data-tab="macro" data-i18n="macroTab"></button>
       <button type="button" data-tab="screen" data-i18n="screen"></button>
       <button type="button" data-tab="profile" data-i18n="profile"></button>
       <button type="button" data-tab="log" data-i18n="log"></button>
+      <button type="button" data-tab="guide" data-i18n="guide"></button>
     </nav>
 
     <div class="side-foot">
@@ -140,64 +142,66 @@
       </div>
     </div>
 
-    <!-- Keys: remap, Fn shortcuts, macros -->
+    <!-- Keys: laid out like the official driver -->
     <div id="tab-keys" class="tab needs-keyboard" hidden>
       <p id="keys-unsupported" class="notice" data-i18n="keysUnsupported" hidden></p>
-      <div class="cols">
-        <section class="panel" aria-labelledby="h-keymap">
-          <div class="panel-head">
-            <h2 id="h-keymap" data-i18n="keysRemap"></h2>
-            <button id="keys-reload" type="button" class="small-btn" data-i18n="keysReload"></button>
-          </div>
-          <div class="chips" role="group" aria-label="Layer">
-            <button type="button" data-layer="normal" aria-pressed="true" data-i18n="layerNormal"></button>
-            <button type="button" data-layer="fn" aria-pressed="false" data-i18n="layerFn"></button>
-          </div>
+      <div class="keys-layout">
+        <section class="panel kside" aria-label="Current setting">
+          <label class="switch-row"><span data-i18n="layerFn"></span><input id="fn-layer" type="checkbox" class="switch"></label>
+          <button id="kread" type="button" data-i18n="keysReadCurrent"></button>
           <p id="keys-state" class="hint"></p>
-          <p id="key-pick-hint" class="hint" data-i18n="keysPickHint"></p>
-          <div id="key-editor" class="key-editor" hidden>
-            <div class="key-head"><strong id="key-name"></strong><span id="key-current" class="hint"></span></div>
-            <p id="key-fn-note" class="notice" data-i18n="keysFnNote" hidden></p>
-            <label class="field"><span class="label" data-i18n="keysAction"></span>
-              <select id="key-type">
-                <option value="key" data-i18n="actKey"></option><option value="media" data-i18n="actMedia"></option>
-                <option value="macro" data-i18n="actMacro"></option><option value="disabled" data-i18n="actDisabled"></option>
-              </select>
-            </label>
-            <div id="key-key-box" class="key-grid">
-              <select id="key-modifier" aria-label="Modifier">
-                <option value="0" data-i18n="modNone"></option><option value="224">Ctrl +</option><option value="225">Shift +</option>
-                <option value="226">Alt +</option><option value="227">Win +</option>
-              </select>
-              <select id="key-target" aria-label="Key"></select>
-              <button id="key-capture" type="button" data-i18n="keysCapture"></button>
-            </div>
-            <div id="key-media-box" hidden><select id="key-media" aria-label="Media key"></select></div>
-            <div id="key-macro-box" class="key-grid" hidden>
-              <select id="key-macro-slot" aria-label="Macro"></select>
-              <select id="key-macro-mode" aria-label="Macro mode"></select>
-            </div>
-            <div class="key-grid">
-              <button id="key-apply" type="button" class="primary" data-i18n="keysApply"></button>
-              <button id="key-reset" type="button" data-i18n="keysResetOne"></button>
-            </div>
+          <div class="kset">
+            <div class="kset-title"><span data-i18n="keysCurrentSetting"></span> · <strong id="kset-key">—</strong></div>
+            <div class="kset-row"><span id="kset-profile-label"></span>: <span id="kset-profile"></span></div>
+            <div class="kset-row"><span data-i18n="layerFn"></span>: <span id="kset-fn"></span></div>
           </div>
-          <div class="tools"><button id="keys-reset-all" type="button" data-i18n="keysResetAll"></button></div>
+          <p id="key-fn-note" class="notice" data-i18n="keysFnNote" hidden></p>
         </section>
-        <section class="panel" aria-labelledby="h-macro">
-          <h2 id="h-macro" data-i18n="macros"></h2>
-          <p class="hint" data-i18n="macroHelp"></p>
-          <div class="key-grid">
-            <select id="macro-slot" aria-label="Macro slot"></select>
-            <button id="macro-load" type="button" data-i18n="macroLoad"></button>
+        <section class="panel kmain" aria-label="Key action">
+          <nav class="kcats" aria-label="Kind">
+            <button type="button" data-kcat="key" data-i18n="kcatKey"></button>
+            <button type="button" data-kcat="macro" data-i18n="kcatMacro"></button>
+            <button type="button" data-kcat="media" data-i18n="kcatMedia"></button>
+            <button type="button" data-kcat="mouse" data-i18n="kcatMouse"></button>
+          </nav>
+          <div class="kbody">
+            <div class="kpane" data-kpane="key">
+              <div class="kkey-row">
+                <div class="kmods">
+                  <label class="kcheck"><input type="checkbox" data-kmod="ctrl"><span>Ctrl</span></label>
+                  <label class="kcheck"><input type="checkbox" data-kmod="alt"><span>Alt</span></label>
+                  <label class="kcheck"><input type="checkbox" data-kmod="shift"><span>Shift</span></label>
+                  <label class="kcheck"><input type="checkbox" data-kmod="win"><span>Win</span></label>
+                </div>
+                <span class="kplus">+</span>
+                <div class="kkey-field">
+                  <input id="kkey" type="text" readonly data-i18n-placeholder="keysPressKey" aria-label="Key">
+                  <button id="kkey-pick" type="button" class="icon-btn" data-i18n-title="keysPickFromList" aria-label="Key list">⌨</button>
+                </div>
+              </div>
+            </div>
+            <div class="kpane" data-kpane="macro" hidden>
+              <div id="kmacro-list" class="kmacro-list"></div>
+              <p class="hint" data-i18n="kmacroHint"></p>
+            </div>
+            <div class="kpane" data-kpane="media" hidden><div id="kmedia-list" class="kgrid"></div></div>
+            <div class="kpane" data-kpane="mouse" hidden><div id="kmouse-list" class="kgrid"></div></div>
+            <div id="kvirtual" class="kvirtual" hidden>
+              <div class="kvirtual-head"><span data-i18n="keysPickFromList"></span><button id="kvirtual-close" type="button" class="small-btn" aria-label="Close">✕</button></div>
+              <div id="kvirtual-keys" class="kvirtual-keys"></div>
+            </div>
+            <div id="kmacro-modes" class="kmodes" hidden>
+              <label class="kcheck"><input type="checkbox" data-kmode="times" checked><span data-i18n="macroMode_times"></span></label>
+              <input id="macro-repeat" type="number" min="1" max="65535" value="1" aria-label="Repeat count">
+              <label class="kcheck"><input type="checkbox" data-kmode="toggle"><span data-i18n="macroMode_toggle"></span></label>
+              <label class="kcheck"><input type="checkbox" data-kmode="hold"><span data-i18n="macroMode_hold"></span></label>
+            </div>
+            <div class="kfoot">
+              <label class="kcheck"><input id="kforbidden" type="checkbox"><span data-i18n="actDisabled"></span></label>
+              <button id="kreset" type="button" data-i18n="keysResetOne"></button>
+              <button id="kconfirm" type="button" class="primary" data-i18n="keysConfirm"></button>
+            </div>
           </div>
-          <div class="key-grid">
-            <button id="macro-record" type="button" data-i18n="macroRecord"></button>
-            <button id="macro-clear" type="button" data-i18n="macroClear"></button>
-          </div>
-          <div id="macro-events" class="macro-events"></div>
-          <label class="field"><span class="label" data-i18n="macroRepeat"></span><input id="macro-repeat" type="number" min="1" max="65535" value="1"></label>
-          <button id="macro-save" type="button" class="primary" data-i18n="macroSave"></button>
         </section>
       </div>
     </div>
@@ -266,12 +270,32 @@
       </section>
     </div>
 
+    <!-- Macro: record and store macros in the keyboard's slots (the Keys tab assigns them to keys) -->
+    <div id="tab-macro" class="tab needs-keyboard" hidden>
+      <section class="panel narrow macro-editor" aria-label="Macro">
+        <div class="kmacro-top">
+          <select id="macro-slot" aria-label="Macro"></select>
+          <button id="macro-load" type="button" data-i18n="macroLoad"></button>
+          <button id="macro-record" type="button" data-i18n="macroRecord"></button>
+          <button id="macro-clear" type="button" data-i18n="macroClear"></button>
+        </div>
+        <div id="macro-events" class="macro-events"></div>
+        <p class="hint" data-i18n="macroHelp"></p>
+        <div class="row"><button id="macro-save" type="button" class="primary" data-i18n="macroSave"></button></div>
+      </section>
+    </div>
+
     <!-- Log -->
     <div id="tab-log" class="tab" hidden>
       <section class="panel" aria-labelledby="h-log">
         <div class="panel-head"><h2 id="h-log" data-i18n="log"></h2><button type="button" class="small-btn clear-log" data-i18n="clearLog"></button></div>
         <div id="log" class="log" aria-live="polite"></div>
       </section>
+    </div>
+
+    <!-- Guide -->
+    <div id="tab-guide" class="tab" hidden>
+      <section class="panel guide" aria-label="Guide"><div id="guide-body"></div></section>
     </div>
   </main>
 </div>

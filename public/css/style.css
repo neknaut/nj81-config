@@ -134,17 +134,50 @@ select option { background: var(--panel); color: var(--ink); font-weight: 500; }
 .tag-state { font-size: 11px; font-weight: 700; padding: 1px 7px; border-radius: 999px; }
 .tag-state.ok { background: var(--ok-bg); color: var(--ok-ink); }
 .tag-state.bad { background: var(--warn-bg); color: var(--warn-ink); }
-/* Keys tab */
-.key.remapped::after { content: attr(data-remap); position: absolute; left: 2px; right: 2px; bottom: 1px; font-size: 9px; line-height: 1.1; color: var(--accent); text-align: center; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; pointer-events: none; }
-.key.remapped { box-shadow: inset 0 0 0 2px var(--accent); }
-.key.selected { outline: 3px solid var(--accent); outline-offset: -1px; z-index: 2; }
-.key-editor { display: flex; flex-direction: column; gap: 10px; padding: 12px; border: 1px solid var(--line); border-radius: 10px; background: var(--raised); }
-.key-head { display: flex; flex-direction: column; gap: 2px; }
-.key-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(120px, 1fr)); gap: 8px; }
-.key-grid > * { width: 100%; min-width: 0; box-sizing: border-box; }
-.key-editor .field select, #key-media { width: 100%; }
-.macro-events { min-height: 44px; padding: 10px; border: 1px dashed var(--line-2); border-radius: 8px; font: 12.5px/1.5 ui-monospace, Consolas, monospace; color: var(--muted); overflow-wrap: anywhere; }
-#macro-repeat { width: 100%; box-sizing: border-box; }
+/* Keys tab: a small card (Fn layer, current setting) and a big card (Key / Macro / Media / Mouse) */
+/* Keys tab, as the driver: a key with a setting of its own is tinted cyan, a forbidden key yellow, the picked key has a red border */
+.keyboard .key.kset-on.kset-on { --side: #12b8a8; --side-light: #19cfbe; --top: #23ffe9; --top-light: #7dfff3; --legend: #08302c; --glow: transparent; text-shadow: none; }
+.keyboard .key.kset-off.kset-off { --side: #b8b800; --side-light: #d4d400; --top: #ffff00; --top-light: #ffff8c; --legend: #333300; --glow: transparent; text-shadow: none; }
+.key.selected { outline: 2px solid #ff3b30; outline-offset: -1px; z-index: 2; }
+.keys-layout { display: grid; grid-template-columns: minmax(220px, 280px) minmax(0, 1fr); gap: 16px; align-items: stretch; }
+.kside { gap: 12px; }
+.switch-row { display: flex; align-items: center; justify-content: space-between; gap: 12px; font-weight: 600; }
+.switch { appearance: none; width: 38px; height: 22px; border-radius: 999px; background: var(--line-2); position: relative; cursor: pointer; transition: background 120ms; flex: none; }
+.switch::after { content: ""; position: absolute; top: 3px; left: 3px; width: 16px; height: 16px; border-radius: 50%; background: var(--ink); transition: left 120ms; }
+.switch:checked { background: var(--accent); }
+.switch:checked::after { left: 19px; background: var(--bg); }
+.kset { display: flex; flex-direction: column; gap: 8px; padding: 12px; border-radius: 10px; background: var(--raised); border: 1px solid var(--line); }
+.kset-title { font-weight: 600; text-align: center; }
+.kset-row { font-size: 14px; color: var(--muted); overflow-wrap: anywhere; }
+.kmain { flex-direction: row; gap: 0; padding: 0; overflow: hidden; }
+.kcats { display: flex; flex-direction: column; gap: 6px; padding: 14px; border-right: 1px solid var(--line); min-width: 130px; }
+.kcats button { justify-content: flex-start; background: transparent; border-color: transparent; }
+.kcats button::before { content: ""; width: 7px; height: 7px; border-radius: 50%; background: var(--dim); flex: none; }
+.kcats button[aria-pressed="true"] { background: var(--accent-bg); border-color: var(--accent); color: var(--accent); }
+.kcats button[aria-pressed="true"]::before { background: var(--accent); }
+.kbody { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 14px; padding: 16px; }
+.kpane { flex: 1; min-height: 150px; }
+.kcheck { display: inline-flex; align-items: center; gap: 8px; font-size: 14px; cursor: pointer; white-space: nowrap; }
+.kcheck input { width: 16px; height: 16px; accent-color: var(--accent); margin: 0; }
+.kkey-row { display: flex; flex-direction: column; gap: 12px; }
+.kmods { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 8px; }
+.kmods .kcheck { justify-content: center; padding: 9px 10px; border: 1px solid var(--line); border-radius: 10px; background: var(--raised); }
+.kmods .kcheck:has(input:checked) { border-color: var(--accent); background: var(--accent-bg); color: var(--accent); }
+.kplus { font-size: 18px; color: var(--muted); text-align: center; line-height: 1; }
+.kkey-field { position: relative; display: flex; gap: 8px; align-items: center; }
+#kkey { flex: 1; min-width: 0; text-align: center; cursor: pointer; font-weight: 600; }
+.icon-btn { min-width: 40px; padding: 0; }
+#kkey-list { position: absolute; top: 44px; left: 0; z-index: 5; width: 200px; padding: 4px; }
+.kgrid { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 10px 14px; max-height: 190px; overflow-y: auto; padding-right: 4px; }
+.kmacro-top { display: grid; grid-template-columns: repeat(auto-fit, minmax(110px, 1fr)); gap: 8px; margin-bottom: 10px; }
+.kmacro-top > * { width: 100%; min-width: 0; box-sizing: border-box; }
+.macro-events { min-height: 60px; padding: 10px; border: 1px dashed var(--line-2); border-radius: 8px; font: 12.5px/1.5 ui-monospace, Consolas, monospace; color: var(--muted); overflow-wrap: anywhere; margin-bottom: 10px; }
+.kmodes { display: flex; flex-wrap: wrap; align-items: center; gap: 10px 18px; padding-top: 10px; border-top: 1px solid var(--line); }
+#macro-repeat { width: 70px; }
+.kfoot { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; padding: 12px; border-radius: 10px; background: var(--raised); border: 1px solid var(--line); }
+.kfoot .kcheck { grid-column: 1 / -1; }
+.kfoot button { white-space: nowrap; width: 100%; }
+@media (max-width: 900px) { .keys-layout { grid-template-columns: minmax(0, 1fr); } .kmain { flex-direction: column; } .kcats { flex-direction: row; flex-wrap: wrap; border-right: 0; border-bottom: 1px solid var(--line); } }
 
 /* Above the keyboard drawing: the typing hint and the clock sync */
 .keyboard-bar { display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; }
@@ -232,3 +265,24 @@ input[type="range"] { accent-color: var(--accent); }
 .links { margin: 0; padding-left: 18px; font-size: 13px; line-height: 1.7; }
 .panel-head { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
 .small-btn { min-height: 34px; padding: 0 12px; font-size: 13px; background: transparent; }
+
+/* Guide */
+.guide { gap: 0; padding: 8px 20px; max-width: 860px; }
+.guide-item { border-bottom: 1px solid var(--line); }
+.guide-item:last-child { border-bottom: 0; }
+.guide-item summary { cursor: pointer; padding: 14px 0; font-weight: 700; font-size: 15px; list-style-position: inside; }
+.guide-item summary:hover { color: var(--accent); }
+.guide-item ul { margin: 0 0 16px; padding-left: 22px; display: flex; flex-direction: column; gap: 8px; color: var(--muted); font-size: 14px; line-height: 1.6; }
+
+/* Keys tab: macro list, on-screen keyboard */
+.kmacro-list { display: flex; flex-direction: column; gap: 8px; max-height: 190px; overflow-y: auto; padding-right: 4px; }
+.kmacro-list .kcheck { justify-content: flex-start; }
+.kmacro-sum { color: var(--dim); font-size: 12px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; }
+.kmodes input:disabled + span { color: var(--dim); }
+.kbody { position: relative; }
+.kvirtual { position: absolute; inset: 0; z-index: 6; display: flex; flex-direction: column; gap: 8px; padding: 12px; background: var(--panel); border-radius: 0 16px 16px 0; overflow: auto; }
+.kvirtual-head { display: flex; justify-content: space-between; align-items: center; font-weight: 600; font-size: 14px; }
+.kvirtual-keys { display: flex; flex-direction: column; gap: 6px; }
+.kvirtual-row { display: flex; flex-wrap: wrap; gap: 4px; }
+.kvirtual-row button { min-height: 0; min-width: 38px; padding: 6px 8px; font-size: 12px; }
+.macro-editor { max-width: 720px; }

@@ -120,7 +120,9 @@ const build = (op, payload = [], bit8 = false) => {
 /* The official driver's "Clear" (captured on an NJ81-ED): AC 00 00 00 00 00 00 53, nothing else. */
 export const clearScreenPacket = () => build(0xac);
 export const CLEAR_MS = 42000;
-export const CHECK_MS = 2500;   // how long a lighting change is checked after it went out before it is reported unconfirmed   // how long an NJ81-ED took to clear (40.8 s and 42.8 s in the capture), for the progress bar
+export const CHECK_MS = 2500;
+const KEY_READ_TRIES = 12;   // single-try reads of one key-map page before giving up (about 3 s)
+const KEY_SETTLE_MS = 600;   // quiet time after a key or macro write   // how long a lighting change is checked after it went out before it is reported unconfirmed   // how long an NJ81-ED took to clear (40.8 s and 42.8 s in the capture), for the progress bar
 export const packet = (op, payload = [], bit8 = false) => {
   if (FORBIDDEN.has(op)) { throw new RoyuanError(`Opcode 0x${op.toString(16)} is not allowed in this app`); }
   return build(op, payload, bit8);
@@ -491,17 +493,27 @@ export class Royuan {
   /* ---------- keys, Fn layer and macros (yc500 / NJ81-ED; see keymap.js for the 4-byte actions) ----------
      As the official driver: the key matrix is read 16 keys a page ([0x89, profile, page] x 8, 128 keys), the Fn layer the
      same way with 0x90; one key is written with [0x13, profile, position, ..., action] (0x15 for the Fn layer); a macro is
-     read with [0x88, index] + 4 replies and written in 56-byte pages [0x16, index, page, 56, last?] + data. Every write
+     read with [0x8B, index, page] for pages 0-3 and written in 56-byte pages [0x16, index, page, 56, last?] + data. Every write
      goes through the flash gap. Checked on a real NJ81-ED (a remap with 0x13, read back with 0x89). */
   #keysOnly() { if (this.family !== "yc500") { throw new RoyuanError("Key settings are only set up for the NJ81-ED (yc500)"); } }
 
+  /* Right after a key write the NJ81-ED refuses reads for about a second (as after a lighting write): each page is read
+     with single tries, given up only after KEY_READ_TRIES refusals. */
   #pagedRead(op, first, pages) {
     return this.#serial(async () => {
       const out = new Uint8Array(pages * ROYUAN.SIZE);
+      const once = this.transport.getFeatureOnce ?? this.transport.getFeature;
       for (let page = 0; page < pages; page += 1) {
-        await this.#send(packet(op, [first, page]));
-        await this.sleep(this.timing.settleMs * 2);
-        out.set((await this.transport.getFeature()).subarray(0, ROYUAN.SIZE), page * ROYUAN.SIZE);
+        let reply = null;
+        for (let attempt = 0; attempt < KEY_READ_TRIES && !reply; attempt += 1) {
+          try {
+            await this.#send(packet(op, [first, page]));
+            await this.sleep(this.timing.settleMs * 2);
+            reply = await once();
+          } catch (error) { reply = null; await this.sleep(250); }
+        }
+        if (!reply) { throw new RoyuanError("The keyboard did not answer the key map read (it may still be busy)"); }
+        out.set(reply.subarray(0, ROYUAN.SIZE), page * ROYUAN.SIZE);
       }
       return out;
     });
@@ -517,20 +529,14 @@ export class Royuan {
     data.set(action, 8);
     return data;
   }
-  setKey(profile, position, action) { this.#keysOnly(); return this.#serial(() => this.#write(this.#keyPacket(0x13, profile, position, action))); }
-  setFnKey(layer, position, action) { this.#keysOnly(); return this.#serial(() => this.#write(this.#keyPacket(0x15, layer, position, action))); }
+  /* After the write the keyboard is left alone for a moment (it refuses reads while it stores the change). */
+  setKey(profile, position, action) { this.#keysOnly(); return this.#serial(async () => { await this.#write(this.#keyPacket(0x13, profile, position, action)); await this.sleep(KEY_SETTLE_MS); }); }
+  setFnKey(layer, position, action) { this.#keysOnly(); return this.#serial(async () => { await this.#write(this.#keyPacket(0x15, layer, position, action)); await this.sleep(KEY_SETTLE_MS); }); }
 
+  /* As the driver's getMacro: [0x8B, index, page] for pages 0-3, the four 64-byte replies joined (0x88 gives stale data). */
   readMacro(index) {
     this.#keysOnly();
-    return this.#serial(async () => {
-      await this.#send(packet(0x88, [index]));
-      const out = new Uint8Array(4 * ROYUAN.SIZE);
-      for (let page = 0; page < 4; page += 1) {
-        await this.sleep(this.timing.settleMs);
-        out.set((await this.transport.getFeature()).subarray(0, ROYUAN.SIZE), page * ROYUAN.SIZE);
-      }
-      return out;
-    });
+    return this.#pagedRead(0x8b, index, 4);
   }
   /* bytes: the 256-byte macro from keymap.encodeMacro. Only the 56-byte pages that hold something are sent. */
   writeMacro(index, bytes) {
@@ -546,6 +552,7 @@ export class Royuan {
         data.set(pages[page], 8);
         await this.#write(data);
       }
+      await this.sleep(KEY_SETTLE_MS);
     });
   }
 

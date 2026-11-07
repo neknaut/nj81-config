@@ -8,6 +8,7 @@ import { GALLERY, LINKS } from "./gallery.js";
 import { initKeys } from "./keys-ui.js";
 import { REACTIVE_DEFAULT, nj81KeyColor } from "./lighting-nj81.js";
 import { currentLanguage, languages, setLanguage, t } from "./i18n.js";
+import { renderGuide } from "./guide.js";
 
 const $ = (id) => document.getElementById(id);
 const STORAGE_KEY = "nj81-config.profiles";
@@ -255,6 +256,10 @@ const nj81Preview = () => {
 };
 
 const paintKeyboard = (time) => {
+  if (currentTab === "keys") {   // the Keys tab: lights off; keys-ui.js tints the keys that have a setting, as the driver
+    for (const key of KEYS) { keyEls.get(key.id).style.setProperty("--led", "#000000"); }
+    return;
+  }
   const nj81 = nj81Preview();
   const reactive = nj81 ? reactiveModes() : null;
   for (const key of KEYS) {
@@ -652,13 +657,13 @@ const download = (name, data, type) => {
    show the "connect to start" card; the log is always there. */
 let ready = false;
 const TAB_KEY = "nj81-config.tab";
-let currentTab = (() => { try { const saved = localStorage.getItem(TAB_KEY); return ["light", "keys", "screen", "profile", "log"].includes(saved) ? saved : "light"; } catch (error) { return "light"; } })();
-const TAB_SUB = { light: "subLight", keys: "subKeys", screen: "subScreen", profile: "subProfile", log: "subLog" };
-const TAB_TITLE = { light: "lighting", keys: "keysTab", screen: "screen", profile: "profile", log: "log" };
+let currentTab = (() => { try { const saved = localStorage.getItem(TAB_KEY); return ["light", "keys", "macro", "screen", "profile", "log", "guide"].includes(saved) ? saved : "light"; } catch (error) { return "light"; } })();
+const TAB_SUB = { light: "subLight", keys: "subKeys", macro: "subMacro", screen: "subScreen", profile: "subProfile", log: "subLog", guide: "subGuide" };
+const TAB_TITLE = { light: "lighting", keys: "keysTab", macro: "macroTab", screen: "screen", profile: "profile", log: "log", guide: "guide" };
 const showTab = (tab) => {
   currentTab = tab;
   try { localStorage.setItem(TAB_KEY, tab); } catch (error) { /* private mode */ }
-  queueMicrotask(() => { if (tab === "keys" && ready) { keys?.onShow(); } else { keys?.onHide(); } });
+  queueMicrotask(() => keys?.onTab(tab, ready));
   $("keyboard-panel").hidden = !ready || !["light", "keys", "screen"].includes(tab);
   for (const button of document.querySelectorAll("[data-tab]")) {
     if (button.dataset.tab === tab) { button.setAttribute("aria-current", "page"); } else { button.removeAttribute("aria-current"); }
@@ -667,7 +672,7 @@ const showTab = (tab) => {
     const panel = $(`tab-${name}`);
     panel.hidden = name !== tab || (panel.classList.contains("needs-keyboard") && !ready);
   }
-  $("start-hint").hidden = ready || tab === "log";
+  $("start-hint").hidden = ready || tab === "log" || tab === "guide";
   $("page-title").dataset.i18n = TAB_TITLE[tab];
   $("page-title").textContent = t(TAB_TITLE[tab]);
   $("page-sub").dataset.i18n = TAB_SUB[tab];
@@ -1092,6 +1097,7 @@ const init = () => {
 
   const applyLanguage = (language) => {
     setLanguage(language);
+    renderGuide($("guide-body"), language);
     for (const button of document.querySelectorAll("[data-lang]")) { button.setAttribute("aria-pressed", String(button.dataset.lang === language)); }
     fillEffectNames();
     refreshOptionControl();   // directions in the new language
