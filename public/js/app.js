@@ -626,7 +626,7 @@ let screenBusy = false;
 const clearScreenAll = async () => {
   if (!nj?.display || nj.client.family !== "yc500") { return; }
   if (!(await confirmModal({ title: t("clearAllTitle"), text: t("clearAllConfirm"), ok: t("clearAllOk"), danger: true }))) { return; }
-  await withProgress({ title: t("clearingAll"), text: "", done: t("clearedAll"), run: clearScreenNow });
+  await withProgress({ title: t("clearingTitle"), text: "", hint: t("clearingHint"), done: t("clearedTitle"), doneText: t("clearedText"), run: clearScreenNow });
 };
 const clearScreenNow = async (report) => {
   stopGif();
@@ -750,14 +750,27 @@ const sendPicture = async ({ report } = {}) => {
 /* Anything sent to the keyboard with a "how far" (Apply a picture, Clear pictures): a modal with the percentage that
    cannot be closed while it runs, and closes by itself when done. run(report) reports 0..1 and returns true when done;
    on a failure the modal stays with a Close button. */
-const withProgress = async ({ title, text, done, run }) => {
+/* The title says what is happening; the line under the bar what to do meanwhile (keep the cable in). */
+const withProgress = async ({ title, text, hint = "", done, doneText = text, run }) => {
   const dialog = $("apply-dialog");
+  const box = dialog.querySelector(".progress-box");
   const bar = $("apply-bar");
   const percent = $("apply-percent");
-  const show = (f) => { const p = Math.max(0, Math.min(100, Math.round(f * 100))); bar.value = p; percent.textContent = `${p}%`; };
-  $("apply-title").textContent = title;
-  $("apply-text").textContent = text;
-  $("apply-text").hidden = !text;
+  const show = (f) => {
+    const p = Math.max(0, Math.min(100, Math.round(f * 100)));
+    bar.style.setProperty("--done", `${p}%`);
+    bar.setAttribute("aria-valuenow", p);
+    percent.firstChild.textContent = p;
+  };
+  const say = (heading, line, below) => {
+    $("apply-title-text").textContent = heading;
+    $("apply-text").textContent = line;
+    $("apply-text").hidden = !line;
+    $("apply-hint").textContent = below;
+    $("apply-hint").hidden = !below;
+  };
+  box.classList.remove("ok", "fail");
+  say(title, text, hint);
   $("apply-close").hidden = true;
   show(0);
   const hold = (event) => event.preventDefault();   // no Esc while it runs
@@ -768,19 +781,19 @@ const withProgress = async ({ title, text, done, run }) => {
   dialog.removeEventListener("cancel", hold);
   if (ok) {
     show(1);
-    $("apply-title").textContent = done;
+    box.classList.add("ok");
+    say(done, doneText, t("progressAutoClose"));
     setTimeout(() => { if (dialog.open) { dialog.close(); } }, 1200);
   } else {
-    $("apply-title").textContent = t("applyFailed");
-    $("apply-text").textContent = t("applyFailedLog");
-    $("apply-text").hidden = false;
+    box.classList.add("fail");   // the bar stays where it stopped
+    say(t("applyFailed"), t("applyFailedLog"), "");
     $("apply-close").hidden = false;
     $("apply-close").focus();
   }
   return ok;
 };
 const applyWithModal = (name) => withProgress({
-  title: t("applyingPicture"), text: name, done: t("pictureApplied"),
+  title: t("applyingPicture"), text: name, hint: t("progressHint"), done: t("pictureApplied"),
   run: async (report) => {
     const sent = await sendPicture({ report });
     if (sent) { keepSentPicture(); clearScreenPick(); }   // sent: the preview is ready for the next picture

@@ -415,10 +415,16 @@
   </form>
 </dialog>
 <dialog id="apply-dialog" class="modal" aria-labelledby="apply-title" aria-describedby="apply-text">
-  <div class="modal-box">
-    <h2 id="apply-title"></h2>
-    <p id="apply-text"></p>
-    <div class="apply-progress"><progress id="apply-bar" value="0" max="100"></progress><output id="apply-percent">0%</output></div>
+  <div class="modal-box progress-box">
+    <div class="progress-head">
+      <div class="progress-words">
+        <h2 id="apply-title"><svg class="progress-icon icon-ok" viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12.5l4.5 4.5L19 7.5"></path></svg><svg class="progress-icon icon-fail" viewBox="0 0 24 24" aria-hidden="true"><path d="M7 7l10 10M17 7L7 17"></path></svg><span id="apply-title-text"></span></h2>
+        <p id="apply-text"></p>
+      </div>
+      <output id="apply-percent" class="progress-number">0<small>%</small></output>
+    </div>
+    <div id="apply-bar" class="progress-track" role="progressbar" aria-labelledby="apply-title" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0"><div class="progress-fill"></div></div>
+    <p id="apply-hint" class="progress-hint" hidden></p>
     <div class="modal-actions"><button type="button" id="apply-close" data-i18n="modalClose" hidden>Đóng</button></div>
   </div>
 </dialog>
