@@ -11,6 +11,7 @@
   <link rel="stylesheet" href="css/style.css">
 </head>
 <body>
+<div id="app-loading" class="app-loading" role="status" aria-live="polite"><div class="spinner"></div><span>NJ81 Config</span></div>
 <div class="app">
 
   <aside class="side">
@@ -36,6 +37,7 @@
       <button type="button" data-tab="macro" data-i18n="macroTab"></button>
       <button type="button" data-tab="screen" data-i18n="screen"></button>
       <button type="button" data-tab="profile" data-i18n="profile"></button>
+      <button type="button" data-tab="share" data-i18n="shareTab"></button>
       <button type="button" data-tab="log" data-i18n="log"></button>
       <button type="button" data-tab="guide" data-i18n="guide"></button>
     </nav>
@@ -282,6 +284,35 @@
         <div id="macro-events" class="macro-events"></div>
         <p class="hint" data-i18n="macroHelp"></p>
         <div class="row"><button id="macro-save" type="button" class="primary" data-i18n="macroSave"></button></div>
+      </section>
+    </div>
+
+    <!-- Share: what Keydous users share in the official driver (read from the same servers) -->
+    <div id="tab-share" class="tab" hidden>
+      <section class="panel share-panel" aria-label="Library">
+        <div id="share-loading" class="panel-loading" hidden><div class="spinner"></div><span data-i18n="shareLoading"></span></div>
+        <div class="chips" role="group" aria-label="Share">
+          <button type="button" data-share-view="images" aria-pressed="true" data-i18n="shareImages"></button>
+          <button type="button" data-share-view="configs" aria-pressed="false" data-i18n="shareConfigs"></button>
+        </div>
+        <p class="hint" data-i18n="shareNote"></p>
+        <div id="share-images-box">
+          <div class="share-bar">
+            <select id="share-img-order" aria-label="Order"><option value="new" data-i18n="shareNewest"></option><option value="top" data-i18n="sharePopular"></option></select>
+            <span id="share-img-state" class="hint"></span>
+            <span class="share-pager"><button id="share-img-prev" type="button" class="small-btn">‹</button><span id="share-img-page"></span><button id="share-img-next" type="button" class="small-btn">›</button></span>
+          </div>
+          <div id="share-images" class="share-grid"></div>
+        </div>
+        <div id="share-configs-box" hidden>
+          <div class="share-bar">
+            <select id="share-cfg-order" aria-label="Order"><option value="time" data-i18n="shareNewest"></option><option value="count" data-i18n="shareMostDownloaded"></option></select>
+            <button id="share-cfg-refresh" type="button" class="small-btn" data-i18n="shareRefresh"></button>
+            <span id="share-cfg-state" class="hint"></span>
+            <span class="share-pager"><button id="share-cfg-prev" type="button" class="small-btn">‹</button><span id="share-cfg-page"></span><button id="share-cfg-next" type="button" class="small-btn">›</button></span>
+          </div>
+          <div id="share-configs" class="share-configs"></div>
+        </div>
       </section>
     </div>
 

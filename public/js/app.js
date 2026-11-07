@@ -9,6 +9,8 @@ import { initKeys } from "./keys-ui.js";
 import { REACTIVE_DEFAULT, nj81KeyColor } from "./lighting-nj81.js";
 import { currentLanguage, languages, setLanguage, t } from "./i18n.js";
 import { renderGuide } from "./guide.js";
+import { initShare } from "./share.js";
+import { decodeAction, describeAction, keyLabel } from "./keymap.js";
 
 const $ = (id) => document.getElementById(id);
 const STORAGE_KEY = "nj81-config.profiles";
@@ -239,6 +241,7 @@ const buildKeyboard = () => {
 };
 
 let keys = null;   // the Keys tab (keys-ui.js)
+let share = null;   // the Share tab (share.js)
 const onKeyClick = (key) => { if (keys?.select(key)) { return; } notePress(key); };   // on the Keys tab a click picks the key; elsewhere it is a key press for the effects
 
 /* Recent key presses (real keyboard or clicks), for the effects that react to typing. */
@@ -479,27 +482,16 @@ const pictureStore = (mode, use) => new Promise((resolve) => {
 const rememberFile = (file, slot) => pictureStore("readwrite", (store) => store.put({ blob: file, name: file.name, type: file.type, at: Date.now() }, pictureKey(slot)));
 const forgetFiles = (slots) => pictureStore("readwrite", (store) => { for (let slot = 0; slot < slots; slot += 1) { store.delete(pictureKey(slot)); } });
 
+/* Only says when a picture was last sent from this browser: the preview and the drawing keep the default "Nek NauT"
+   picture (or the one chosen on this machine), not the last one sent. */
 const showLastPicture = async () => {
-  if (screenPixels) { return; }   // the user already picked one
-  const kept = await pictureStore("readonly", (store) => store.get(pictureKey(Number($("screen-slot").value) || 0)));
-  if (kept?.blob && !screenPixels) {
-    try {
-      await loadScreenFile(new File([kept.blob], kept.name || "picture", { type: kept.type || kept.blob.type }), { restored: true });
-      $("screen-name").textContent = `${t("lastPictureSent")} ${new Date(kept.at).toLocaleString()}${kept.name ? ` · ${kept.name}` : ""}`;
-      $("screen-send").classList.remove("pending");
-      return;
-    } catch (error) { /* fall back to the still kept in localStorage */ }
-  }
+  const slot = Number($("screen-slot").value) || 0;
+  const kept = await pictureStore("readonly", (store) => store.get(pictureKey(slot)));
   let saved = null;
-  try { saved = JSON.parse(localStorage.getItem(pictureKey(Number($("screen-slot").value) || 0)) || "null"); } catch (error) { saved = null; }
-  if (!saved?.url) { $("screen-name").textContent = t("noPictureSent"); return; }
-  try {
-    const image = new Image();
-    image.src = saved.url;
-    await image.decode();
-    setScreenSource(await createImageBitmap(image), saved.name || "");
-    $("screen-name").textContent = `${t("lastPictureSent")} ${new Date(saved.at).toLocaleString()}${saved.name ? ` · ${saved.name}` : ""}`;
-  } catch (error) { /* a broken entry: nothing to show */ }
+  try { saved = JSON.parse(localStorage.getItem(pictureKey(slot)) || "null"); } catch (error) { saved = null; }
+  const last = kept?.blob ? { at: kept.at, name: kept.name } : saved?.url ? saved : null;
+  if (screenFile || screenPixels) { return; }   // a picture picked here: its own name is on show
+  $("screen-name").textContent = last ? `${t("lastPictureSent")} ${new Date(last.at).toLocaleString()}${last.name ? ` · ${last.name}` : ""}` : t("noPictureSent");
 };
 
 /* "Clear pictures and GIFs" (NJ81-ED): the official driver's Clear, copied from a USB capture. The keyboard is left alone
@@ -657,13 +649,13 @@ const download = (name, data, type) => {
    show the "connect to start" card; the log is always there. */
 let ready = false;
 const TAB_KEY = "nj81-config.tab";
-let currentTab = (() => { try { const saved = localStorage.getItem(TAB_KEY); return ["light", "keys", "macro", "screen", "profile", "log", "guide"].includes(saved) ? saved : "light"; } catch (error) { return "light"; } })();
-const TAB_SUB = { light: "subLight", keys: "subKeys", macro: "subMacro", screen: "subScreen", profile: "subProfile", log: "subLog", guide: "subGuide" };
-const TAB_TITLE = { light: "lighting", keys: "keysTab", macro: "macroTab", screen: "screen", profile: "profile", log: "log", guide: "guide" };
+let currentTab = (() => { try { const saved = localStorage.getItem(TAB_KEY); return ["light", "keys", "macro", "screen", "profile", "share", "log", "guide"].includes(saved) ? saved : "light"; } catch (error) { return "light"; } })();
+const TAB_SUB = { light: "subLight", keys: "subKeys", macro: "subMacro", screen: "subScreen", profile: "subProfile", share: "subShare", log: "subLog", guide: "subGuide" };
+const TAB_TITLE = { light: "lighting", keys: "keysTab", macro: "macroTab", screen: "screen", profile: "profile", share: "shareTab", log: "log", guide: "guide" };
 const showTab = (tab) => {
   currentTab = tab;
   try { localStorage.setItem(TAB_KEY, tab); } catch (error) { /* private mode */ }
-  queueMicrotask(() => keys?.onTab(tab, ready));
+  queueMicrotask(() => { keys?.onTab(tab, ready); if (tab === "share") { share?.onShow(); } });
   $("keyboard-panel").hidden = !ready || !["light", "keys", "screen"].includes(tab);
   for (const button of document.querySelectorAll("[data-tab]")) {
     if (button.dataset.tab === tab) { button.setAttribute("aria-current", "page"); } else { button.removeAttribute("aria-current"); }
@@ -672,7 +664,7 @@ const showTab = (tab) => {
     const panel = $(`tab-${name}`);
     panel.hidden = name !== tab || (panel.classList.contains("needs-keyboard") && !ready);
   }
-  $("start-hint").hidden = ready || tab === "log" || tab === "guide";
+  $("start-hint").hidden = ready || tab === "log" || tab === "guide" || tab === "share";
   $("page-title").dataset.i18n = TAB_TITLE[tab];
   $("page-title").textContent = t(TAB_TITLE[tab]);
   $("page-sub").dataset.i18n = TAB_SUB[tab];
@@ -943,6 +935,7 @@ session.addEventListener("connected", async (event) => {
   const vendor = event.detail.collections.some((c) => c.usagePage === ROYUAN.USAGE_PAGE && ROYUAN.USAGES.includes(c.usage));
   if (!vendor) { logWarn("areaConn", t("njNoInterface")); return; }
   await detectNj81();
+  finishBoot();
 });
 session.addEventListener("disconnected", () => { setConnected(false); dropKeyboard(); clearLog(); effectReport.clear(); $("effect-report").replaceChildren(); $("light-status").hidden = true; });
 
@@ -1091,6 +1084,26 @@ const importJson = async (event) => {
 };
 
 /* ---------- start ---------- */
+/* The page shows a full-screen loading until it is ready: built, the keyboard this site may use connected and read (or
+   found missing), and the Library loaded (its first page of pictures and the NJ81-ED settings). At most 90 s (the very
+   first visit reads the whole list of shared settings once). */
+let booted = false;
+let keyboardSettled = false;
+let libraryReady = false;
+const bootText = (text) => { const el = document.querySelector("#app-loading span"); if (el && text) { el.textContent = text; } };
+const finishBoot = (force = false) => {
+  if (booted) { return; }
+  if (force !== true) { keyboardSettled = true; }
+  if (force !== true && !(keyboardSettled && libraryReady)) { return; }
+  booted = true;
+  requestAnimationFrame(() => requestAnimationFrame(() => {
+    const cover = $("app-loading");
+    if (!cover) { return; }
+    cover.classList.add("done");
+    setTimeout(() => cover.remove(), 350);
+  }));
+};
+
 const init = () => {
   fillEffectOptions();
   const fillEffectNames = () => { const keep = $("effect").value; fillEffectOptions(); $("effect").value = keep; };   // "Lights off" is translated
@@ -1138,10 +1151,38 @@ const init = () => {
   $("screen-fit").addEventListener("change", (event) => { drawScreen(); event.target.blur(); });
   $("gif-play").addEventListener("click", () => playGif(!gif?.playing));
   $("screen-clear-all").addEventListener("click", clearScreenAll);
-  $("screen-slot").addEventListener("change", () => { screenPixels = null; showLastPicture(); });
+  $("screen-slot").addEventListener("change", () => showLastPicture());
   $("gif-frame").addEventListener("input", (event) => { if (gif) { playGif(false); showGifFrame(Number(event.target.value)); } });
   buildGallery();
   keys = initKeys({ $, t, log, logOk, logWarn, logError, why, getNj: () => nj, keyEls, KEYS });
+  share = initShare({
+    $, t, logOk, logWarn, logError, why, getNj: () => nj,
+    /* a shared picture / GIF goes to the Screen tab, ready to send */
+    usePicture: async (file) => { await loadScreenFile(file); $("screen-send").classList.add("pending"); showTab("screen"); },
+    /* a shared lighting setting: into the form, then sent as any change made here */
+    applyLight: async (light, name) => {
+      if (!nj) { logWarn("areaShare", t("screenNeedsKeyboard")); return; }
+      profile = validateProfile({
+        ...profile,
+        lighting: { ...profile.lighting, color: light.color, brightness: fromLevel(Math.min(light.brightness, brightnessTop), brightnessTop), speed: fromLevel(light.speed),
+          nj81: { mode: light.off ? profile.lighting.nj81?.mode || 1 : light.mode, option: light.option, rainbow: light.rainbow, off: light.off } },
+      }).profile;
+      fillEffectOptions();
+      writeForm();
+      logOk("areaShare", `${name}: ${describeNj(light)}`);
+      apply();
+    },
+    applyKeys: async (list, name, fnLayer) => {
+      if (!nj) { logWarn("areaShare", t("screenNeedsKeyboard")); return; }
+      if (!window.confirm(`${t(fnLayer ? "shareKeysConfirmFn" : "shareKeysConfirm")} (${list.length})`)) { return; }
+      await keys.applyShared(list, name, fnLayer);
+    },
+    describeLight: (light) => describeNj(light),
+    describeKey: (v, bytes) => {
+      const action = decodeAction(bytes);
+      return `${keyLabel(v.original)} → ${action.type === "disabled" ? t("actDisabled") : describeAction(action)}`;
+    },
+  });
   restoreChosen();   // the picture this browser chose last time
   $("learn-start").addEventListener("click", () => setLearning(true));
   $("reactive").addEventListener("change", (event) => {
@@ -1183,9 +1224,12 @@ const init = () => {
   log(hidSupported() ? "WebHID ok" : "WebHID not available");
   if (hidSupported()) {
     // a keyboard this site was already allowed to use connects by itself, unless the user pressed "Disconnect"
-    if (autoConnect()) { session.reconnect().catch(() => {}); }
+    if (autoConnect()) { session.reconnect().then((device) => { if (!device) { finishBoot(); } }).catch(finishBoot); } else { finishBoot(); }
     navigator.hid.addEventListener("disconnect", (event) => { if (event.device === session.device) { session.close(); } });
   }
+  else { finishBoot(); }
+  share.preload(bootText).catch(() => {}).finally(() => { libraryReady = true; if (keyboardSettled) { finishBoot(); } });
+  setTimeout(() => finishBoot(true), 90000);
   requestAnimationFrame(frame);
 };
 
