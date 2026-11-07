@@ -42,22 +42,33 @@ export const keyLabel = (hid) => BY_HID.get(hid)?.label ?? `0x${hid.toString(16)
 export const MODIFIERS = { ctrl: 224, shift: 225, alt: 226, win: 227 };
 const MODIFIER_NAME = { 224: "Ctrl", 225: "Shift", 226: "Alt", 227: "Win" };
 
-/* Media and system keys (HID consumer usages), as seen on the NJ81-ED's Fn layer and in the driver. */
+/* Media / system keys and mouse buttons, exactly as the driver's tables (MC, CC, MF) code them. */
 export const MEDIA = [
-  { usage: 0x00e9, id: "volUp", label: "Vol +" }, { usage: 0x00ea, id: "volDown", label: "Vol −" }, { usage: 0x00e2, id: "mute", label: "Mute" },
-  { usage: 0x00cd, id: "playPause", label: "Play / Pause" }, { usage: 0x00b5, id: "next", label: "Next" }, { usage: 0x00b6, id: "previous", label: "Previous" },
-  { usage: 0x00b7, id: "stop", label: "Stop" }, { usage: 0x0192, id: "calculator", label: "Calculator" }, { usage: 0x018a, id: "mail", label: "Mail" },
-  { usage: 0x0223, id: "browser", label: "Browser home" }, { usage: 0x0194, id: "computer", label: "My computer" },
+  { id: "fn", bytes: [10, 1, 0, 0] }, { id: "player", bytes: [3, 0, 131, 1] }, { id: "playPause", bytes: [3, 0, 205, 0] },
+  { id: "stop", bytes: [3, 0, 183, 0] }, { id: "previous", bytes: [3, 0, 182, 0] }, { id: "next", bytes: [3, 0, 181, 0] },
+  { id: "volDown", bytes: [3, 0, 234, 0] }, { id: "volUp", bytes: [3, 0, 233, 0] }, { id: "mute", bytes: [3, 0, 226, 0] },
+  { id: "calculator", bytes: [3, 0, 146, 1] }, { id: "mail", bytes: [3, 0, 138, 1] }, { id: "computer", bytes: [3, 0, 148, 1] },
+  { id: "search", bytes: [3, 0, 33, 2] }, { id: "homepage", bytes: [3, 0, 35, 2] }, { id: "brightUp", bytes: [3, 0, 111, 0] },
+  { id: "brightDown", bytes: [3, 0, 112, 0] }, { id: "refresh", bytes: [3, 0, 39, 2] }, { id: "zoomOut", bytes: [0, 0, 227, 45] },
+  { id: "zoomIn", bytes: [0, 0, 227, 46] }, { id: "mic", bytes: [6, 128, 0, 0] },
 ];
-const MEDIA_BY_USAGE = new Map(MEDIA.map((m) => [m.usage, m]));
+export const MOUSE = [
+  { id: "left", bytes: [1, 0, 240, 0] }, { id: "right", bytes: [1, 0, 241, 0] }, { id: "middle", bytes: [1, 0, 242, 0] },
+  { id: "forward", bytes: [1, 0, 244, 0] }, { id: "back", bytes: [1, 0, 243, 0] }, { id: "wheelUp", bytes: [1, 0, 247, 0] },
+  { id: "wheelDown", bytes: [1, 0, 248, 0] },
+];
+const byBytes = (list, b) => list.find((e) => e.bytes.join() === b.join());
 
 export const MACRO_MODES = ["times", "toggle", "hold"];   // 0 repeat N times, 1 on / off, 2 repeat while held
 
 export const decodeAction = (b) => {
   const [a, m, k, k2] = b;
   if (a === 0 && m === 0 && k === 0 && k2 === 0) { return { type: "disabled" }; }
+  const media = byBytes(MEDIA, b);
+  if (media) { return { type: "media", id: media.id }; }
+  const mouse = byBytes(MOUSE, b);
+  if (mouse) { return { type: "mouse", id: mouse.id }; }
   if (a === 0) { return { type: "key", modifier: MODIFIER_NAME[m] ? m : 0, hid: k, hid2: k2 }; }
-  if (a === 3) { return { type: "media", usage: k | (k2 << 8) }; }
   if (a === 9) { return { type: "macro", mode: MACRO_MODES[m] ?? "times", index: k }; }
   return { type: "raw", bytes: [a, m, k, k2] };   // the keyboard's own functions
 };
@@ -66,20 +77,25 @@ export const encodeAction = (action) => {
   switch (action.type) {
     case "disabled": return [0, 0, 0, 0];
     case "key": return [0, action.modifier ?? 0, action.hid & 0xff, action.hid2 ?? 0];
-    case "media": return [3, 0, action.usage & 0xff, action.usage >> 8];
+    case "media": return [...MEDIA.find((e) => e.id === action.id).bytes];
+    case "mouse": return [...MOUSE.find((e) => e.id === action.id).bytes];
     case "macro": return [9, Math.max(0, MACRO_MODES.indexOf(action.mode)), action.index, 0];
     case "raw": return [...action.bytes];
     default: throw new Error(`Unknown key action ${action.type}`);
   }
 };
 
+/* Names in the page's language, set by the page (setActionLabels). */
+const labels = {};
+export const setActionLabels = (value) => Object.assign(labels, value);
 export const describeAction = (action) => {
   switch (action.type) {
     case "disabled": return "—";
-    case "key": return `${MODIFIER_NAME[action.modifier] ? `${MODIFIER_NAME[action.modifier]} + ` : ""}${keyLabel(action.hid)}`;
-    case "media": return MEDIA_BY_USAGE.get(action.usage)?.label ?? `Media 0x${action.usage.toString(16)}`;
-    case "macro": return `Macro ${action.index + 1}`;
-    default: return "Fn";
+    case "key": return [MODIFIER_NAME[action.modifier], action.hid && keyLabel(action.hid), action.hid2 && keyLabel(action.hid2)].filter(Boolean).join(" + ");   // as the driver: Ctrl + Shift + A
+    case "media": return labels.media?.(action.id) ?? action.id;
+    case "mouse": return labels.mouse?.(action.id) ?? action.id;
+    case "macro": return `${labels.macro ?? "Macro"} ${action.index + 1}`;
+    default: return labels.special ?? "Fn";
   }
 };
 export const sameAction = (a, b) => encodeAction(a).join() === encodeAction(b).join();
