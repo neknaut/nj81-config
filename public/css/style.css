@@ -289,7 +289,15 @@ input[type="range"] { accent-color: var(--accent); }
 
 /* Share tab */
 .share-bar { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; margin-bottom: 12px; }
-.share-pager { margin-left: auto; display: inline-flex; align-items: center; gap: 8px; font-size: 13px; color: var(--muted); }
+/* the page numbers under the list, in the middle */
+.share-pages { display: flex; justify-content: center; margin-top: 16px; }
+.share-pager { display: inline-flex; align-items: center; gap: 8px; font-size: 13px; color: var(--muted); }
+.share-pager > span { min-width: 64px; text-align: center; font-variant-numeric: tabular-nums; }
+/* Newest / Featured: tabs with an underline (the Pictures / Settings switch above stays as chips) */
+.seg { display: inline-flex; gap: 4px; border-bottom: 1px solid var(--line); }
+.seg button { background: transparent; border: 0; border-bottom: 2px solid transparent; border-radius: 0; padding: 8px 12px; color: var(--muted); font-weight: 600; margin-bottom: -1px; }
+.seg button:hover { color: var(--ink); }
+.seg button[aria-selected="true"] { color: var(--accent); border-bottom-color: var(--accent); }
 .share-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(190px, 1fr)); gap: 12px; }
 .share-card { margin: 0; display: flex; flex-direction: column; gap: 8px; padding: 10px; border: 1px solid var(--line); border-radius: 12px; background: var(--raised); min-width: 0; }
 .share-shot { aspect-ratio: 2 / 1; background: #000; border-radius: 6px; overflow: hidden; display: grid; place-items: center; color: var(--dim); }

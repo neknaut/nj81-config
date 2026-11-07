@@ -185,8 +185,16 @@ export const initShare = (ctx) => {
   };
   const aborted = (error) => error?.name === "AbortError";
   const remember = () => { try { sessionStorage.setItem(VIEW_KEY, JSON.stringify({ view: state.view, imgOrder: state.imgOrder, imgPage: state.imgPage, cfgOrder: state.cfgOrder, cfgPage: state.cfgPage })); } catch (error) { /* private mode */ } };
-  $("share-img-order").value = state.imgOrder;
-  $("share-cfg-order").value = state.cfgOrder;
+  /* Newest / Featured (Most downloaded) are tabs: the one on show is marked */
+  const markOrder = (id, value) => {
+    for (const b of $(id).querySelectorAll("[data-order]")) {
+      const on = b.dataset.order === value;
+      b.setAttribute("aria-selected", String(on));
+      b.tabIndex = on ? 0 : -1;
+    }
+  };
+  markOrder("share-img-order", state.imgOrder);
+  markOrder("share-cfg-order", state.cfgOrder);
 
   /* ---------- pictures / GIFs ---------- */
   /* Files by md5 (the same picture is not fetched twice, e.g. in both orders), as blob URLs, decoded ahead so a page shows
@@ -478,7 +486,14 @@ export const initShare = (ctx) => {
     }
   };
   for (const b of document.querySelectorAll("[data-share-view]")) { b.addEventListener("click", () => show(b.dataset.shareView)); }
-  $("share-img-order").addEventListener("change", () => { state.imgOrder = $("share-img-order").value; state.imgPage = 1; loadImages(); });
+  $("share-img-order").addEventListener("click", (event) => {
+    const order = event.target.closest("[data-order]")?.dataset.order;
+    if (!order || order === state.imgOrder) { return; }
+    state.imgOrder = order;
+    state.imgPage = 1;
+    markOrder("share-img-order", order);
+    loadImages();
+  });
   const turn = (step, to = null) => {
     const page = Math.max(1, Math.min(state.imgPages, to ?? state.imgPage + step));
     if (page === state.imgPage) { return; }   // first / last page: nothing to ask the server
@@ -497,7 +512,14 @@ export const initShare = (ctx) => {
     if (event.key === "Home") { event.preventDefault(); turn(0, 1); }
     if (event.key === "End") { event.preventDefault(); turn(0, state.imgPages); }
   });
-  $("share-cfg-order").addEventListener("change", () => { state.cfgOrder = $("share-cfg-order").value; state.cfgPage = 1; renderConfigs(); });
+  $("share-cfg-order").addEventListener("click", (event) => {
+    const order = event.target.closest("[data-order]")?.dataset.order;
+    if (!order || order === state.cfgOrder) { return; }
+    state.cfgOrder = order;
+    state.cfgPage = 1;
+    markOrder("share-cfg-order", order);
+    renderConfigs();
+  });
   $("share-cfg-prev").addEventListener("click", () => { if (state.cfgPage > 1) { state.cfgPage -= 1; renderConfigs(); } });
   $("share-cfg-next").addEventListener("click", () => { state.cfgPage += 1; renderConfigs(); });
   $("share-cfg-first").addEventListener("click", () => { state.cfgPage = 1; renderConfigs(); });
@@ -513,7 +535,8 @@ export const initShare = (ctx) => {
     const note = () => Object.assign(document.createElement("p"), { className: "notice", textContent: t("shareOriginBlocked").replace("{origin}", location.origin) });
     $("share-images").replaceChildren(note());
     $("share-configs").replaceChildren(note());
-    for (const id of ["share-img-order", "share-img-first", "share-img-prev", "share-img-next", "share-img-last", "share-cfg-order", "share-cfg-refresh", "share-cfg-first", "share-cfg-prev", "share-cfg-next", "share-cfg-last"]) { $(id).disabled = true; }
+    for (const b of document.querySelectorAll("#share-img-order button, #share-cfg-order button")) { b.disabled = true; }
+    for (const id of ["share-img-first", "share-img-prev", "share-img-next", "share-img-last", "share-cfg-refresh", "share-cfg-first", "share-cfg-prev", "share-cfg-next", "share-cfg-last"]) { $(id).disabled = true; }
   };
   let preloading = false;
   /* Always run at start (the full-screen loading waits for it): finds the way to the Keydous servers, then the page on show. */

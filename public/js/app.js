@@ -678,7 +678,9 @@ let ready = false;
 const TAB_KEY = "nj81-config.tab";
 /* The tab is kept for F5 only (sessionStorage): closing the page and opening it again starts on Lighting. */
 try { localStorage.removeItem(TAB_KEY); } catch (error) { /* private mode */ }   // kept there by older versions
-let currentTab = (() => { try { const saved = sessionStorage.getItem(TAB_KEY); return ["light", "keys", "macro", "screen", "profile", "share", "log", "guide"].includes(saved) ? saved : "light"; } catch (error) { return "light"; } })();
+/* The tab to open once connected: Lighting, except after an F5, which comes back to the tab that was open. */
+const reloaded = performance.getEntriesByType?.("navigation")?.[0]?.type === "reload";
+let currentTab = (() => { try { const saved = reloaded ? sessionStorage.getItem(TAB_KEY) : null; return ["light", "keys", "macro", "screen", "profile", "share", "log", "guide"].includes(saved) ? saved : "light"; } catch (error) { return "light"; } })();
 const TAB_SUB = { light: "subLight", keys: "subKeys", macro: "subMacro", screen: "subScreen", profile: "subProfile", share: "subShare", log: "subLog", guide: "subGuide" };
 const TAB_TITLE = { light: "lighting", keys: "keysTab", macro: "macroTab", screen: "screen", profile: "profile", share: "shareTab", log: "log", guide: "guide" };
 /* The Guide is long: it is drawn the first time its tab opens, and again only if the language changed since. */
@@ -694,31 +696,23 @@ const showTab = (tab) => {
   showGuide();
   queueMicrotask(() => { keys?.onTab(tab, ready); if (tab === "share") { share?.onShow(); } else { share?.onHide(); } });
   $("keyboard-panel").hidden = !ready || !["light", "keys", "screen"].includes(tab);
-  /* Without a keyboard the tabs that need one are not in the sidebar (Library, Log and Guide stay); the tab asked for is
-     kept and comes back once a keyboard is connected. Meanwhile the page shows how to connect. */
-  const needsKeyboard = (name) => $(`tab-${name}`)?.classList.contains("needs-keyboard");
-  const waiting = !ready && needsKeyboard(tab);
+  /* Without a keyboard there are no tabs: the page shows only how to connect. The tab asked for (Lighting by default, or the
+     one open before an F5 or an unplug) is kept and opens once a keyboard is connected. */
+  const waiting = !ready;
+  $("nav").hidden = waiting;
   for (const button of document.querySelectorAll("[data-tab]")) {
-    button.hidden = !ready && needsKeyboard(button.dataset.tab);
     if (button.dataset.tab === tab && !waiting) { button.setAttribute("aria-current", "page"); } else { button.removeAttribute("aria-current"); }
   }
-  for (const name of Object.keys(TAB_SUB)) {
-    const panel = $(`tab-${name}`);
-    panel.hidden = name !== tab || (panel.classList.contains("needs-keyboard") && !ready);
-  }
-  $("start-hint").hidden = ready || tab === "log" || tab === "guide";
+  for (const name of Object.keys(TAB_SUB)) { $(`tab-${name}`).hidden = waiting || name !== tab; }
+  $("start-hint").hidden = !waiting;
   $("page-title").dataset.i18n = waiting ? "connection" : TAB_TITLE[tab];
   $("page-title").textContent = t($("page-title").dataset.i18n);
   $("page-sub").dataset.i18n = waiting ? "connectionHelp" : TAB_SUB[tab];
   $("page-sub").textContent = t($("page-sub").dataset.i18n);
 };
 const setControlsEnabled = (on) => {
-  const connecting = on && !ready;
   ready = on;
   if (!on) { $("confirm-pill").hidden = true; }
-  // Once connected the page opens on Lighting, unless a keyboard tab was open before (F5, or a reconnect after unplugging):
-  // before connecting only Log and Guide are there, so being on one of them just means nothing was chosen yet.
-  if (connecting && !$(`tab-${currentTab}`)?.classList.contains("needs-keyboard")) { currentTab = "light"; }
   showTab(currentTab);
 };
 /* The pill next to the title, updated at each step of a change so the page answers the click at once:
@@ -1133,7 +1127,8 @@ const bootText = (text) => { const el = document.querySelector("#app-loading spa
 const finishBoot = (force = false) => {
   if (booted) { return; }
   if (force !== true) { keyboardSettled = true; }
-  if (force !== true && !(keyboardSettled && libraryReady)) { return; }
+  // the Library is a tab only with a keyboard: without one there is nothing of it to wait for
+  if (force !== true && !(keyboardSettled && (libraryReady || !ready))) { return; }
   booted = true;
   let gone = false;
   const lift = () => {
