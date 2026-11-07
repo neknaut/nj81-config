@@ -10,12 +10,13 @@ import { extname, join, normalize, resolve, sep } from "node:path";
 import { fileURLToPath } from "node:url";
 
 const ROOT = resolve(fileURLToPath(new URL("./public/", import.meta.url)));
-const PORT_SET = Boolean(process.env.PORT);   // a port asked for (by the host or by hand) is used as is, never another
+/* Nothing to configure. A host (Render, Railway, Fly, Heroku…) gives the port in PORT: then that port, on every interface,
+   as its router reaches the app from outside. Run by hand (npm start): http://localhost:8080, this computer only, or the
+   next free port up to 8089 when another program holds 8080 (see start below). */
+const DEPLOYED = Boolean(process.env.PORT);
 const PORT = Number(process.env.PORT) || 8080;
+const HOST = DEPLOYED ? "0.0.0.0" : "localhost";
 const APP = "nj81-config";   // answered in X-App by /keydous/ping, so a second start can tell this server is already running
-/* Where the server listens: HOST if set; on Render (it sets RENDER) every interface, as its router reaches the service from
-   outside; otherwise only this computer (localhost: nothing else on the network can open it). */
-const HOST = process.env.HOST || (process.env.RENDER ? "0.0.0.0" : "localhost");
 const TYPES = {
   ".html": "text/html; charset=utf-8", ".js": "text/javascript; charset=utf-8", ".mjs": "text/javascript; charset=utf-8",
   ".css": "text/css; charset=utf-8", ".json": "application/json; charset=utf-8", ".svg": "image/svg+xml", ".png": "image/png",
@@ -165,8 +166,8 @@ const start = async () => {
         console.log(`NJ81 Config is already running: http://localhost:${port}/  (nothing new started)`);
         process.exit(0);
       }
-      if (PORT_SET || port >= LAST_PORT) {
-        console.error(`Port ${port} is already in use${PORT_SET ? ` (PORT=${PORT} was asked for)` : ` (and ${PORT}-${LAST_PORT - 1} too)`}. Close the program using it, or choose another PORT. To see which program it is:`);
+      if (DEPLOYED || port >= LAST_PORT) {
+        console.error(`Port ${port} is already in use${DEPLOYED ? " (the port the host gave)" : ` (and ${PORT}-${LAST_PORT - 1} too)`}. Close the program using it. To see which program it is:`);
         console.error(whoHolds(port));
         process.exit(1);
       }
@@ -176,19 +177,17 @@ const start = async () => {
 start().catch((error) => { console.error(error.message); process.exit(1); });
 
 /* Keep-alive (as the slack-bot does): a free Render web service sleeps after 15 minutes without a visit, and the next visitor
-   then waits ~50 s. Every KEEPALIVE_MINUTES (10) the server visits its own public address, which Render sets in
-   RENDER_EXTERNAL_URL; nothing happens locally (no such variable) or with KEEPALIVE=0. A sleeping service cannot wake itself:
-   this only keeps an awake one awake. */
+   then waits ~50 s. Every 10 minutes the server visits its own public address, which Render gives in RENDER_EXTERNAL_URL.
+   Elsewhere (no such variable) nothing happens. A sleeping service cannot wake itself: this keeps an awake one awake. */
 function keepAlive() {
-  const base = (process.env.KEEPALIVE_URL || process.env.RENDER_EXTERNAL_URL || "").replace(/\/+$/, "");
-  if (!base || process.env.KEEPALIVE === "0") { return; }
-  const minutes = Math.max(1, Number(process.env.KEEPALIVE_MINUTES) || 10);
+  const base = (process.env.RENDER_EXTERNAL_URL || "").replace(/\/+$/, "");
+  if (!base) { return; }
   const ping = async () => {
     try {
       const answer = await fetch(`${base}/keydous/ping`, { signal: AbortSignal.timeout(30_000), headers: { "User-Agent": "nj81-config keep-alive" } });
       if (answer.status !== 204) { console.warn(`keep-alive: ${base} answered ${answer.status}`); }
     } catch (error) { console.warn(`keep-alive: ${error.message}`); }
   };
-  setInterval(ping, minutes * 60_000).unref();
-  console.log(`keep-alive: ${base}/keydous/ping every ${minutes} min`);
+  setInterval(ping, 10 * 60_000).unref();
+  console.log(`keep-alive: ${base}/keydous/ping every 10 min`);
 }

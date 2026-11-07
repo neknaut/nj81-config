@@ -15,7 +15,6 @@ library of shared pictures and settings. No driver to install.
 - [Features](#features)
 - [Quick start](#quick-start)
 - [Connecting the keyboard](#connecting-the-keyboard)
-- [Configuration](#configuration)
 - [Deployment](#deployment)
 - [How it works](#how-it-works)
 - [Safety](#safety)
@@ -39,7 +38,7 @@ Tested on a real **NJ81-ED**. Other NJ81 models (CP, MAX, S) are recognised and 
 
 ## Quick start
 
-Requirements: **Node.js 20+** and **Chrome or Edge** on a computer. There is nothing to install (`npm install` is not needed).
+Requirements: **Node.js 20+** and **Chrome or Edge** on a computer. Nothing to install and nothing to configure.
 
 ```bash
 git clone https://github.com/neknaut/nj81-config.git
@@ -63,23 +62,6 @@ If port 8080 is busy, `npm start` handles it:
 
 The page reconnects by itself next time until you press **Disconnect**.
 
-## Configuration
-
-All settings are environment variables and all are optional.
-
-| Variable | Default | Purpose |
-|---|---|---|
-| `PORT` | `8080` | Port to listen on. Set by the host when deployed. If set, only that port is used. |
-| `HOST` | `localhost` (`0.0.0.0` on Render) | Address to listen on. Use `0.0.0.0` on hosts other than Render. |
-| `KEEPALIVE` | on when deployed | `0` turns the keep-alive ping off. |
-| `KEEPALIVE_MINUTES` | `10` | Minutes between keep-alive pings. |
-| `KEEPALIVE_URL` | `RENDER_EXTERNAL_URL` | Public address to ping on hosts other than Render. |
-
-```bash
-PORT=3000 npm start            # bash / zsh
-$env:PORT=3000; npm start      # PowerShell
-```
-
 ## Deployment
 
 Deploy the whole app with **`server.mjs`**, not only the `public/` folder: the Library needs the server (see
@@ -89,7 +71,7 @@ Deploy the whole app with **`server.mjs`**, not only the `public/` folder: the L
 
 1. **New → Blueprint** and pick this repository. [`render.yaml`](render.yaml) creates a free Node web service running
    `node server.mjs`, with no build step.
-2. Render's HTTPS, `PORT` and listen address are handled automatically. Nothing to configure.
+2. That is all: Render provides HTTPS and the port, and the server picks them up by itself.
 
 Free instances sleep after 15 minutes without traffic. The server pings its own `/keydous/ping` every 10 minutes to stay
 awake. Render's free plan has **750 instance hours per month for the whole workspace**: one always-on service uses about
@@ -100,7 +82,7 @@ awake. Render's free plan has **750 instance hours per month for the whole works
 
 ### Other hosts
 
-Run `node server.mjs` behind HTTPS with `HOST=0.0.0.0` and the host's `PORT`. The server sets its own security headers
+Start it with `npm start` (or `node server.mjs`) behind HTTPS. It uses the port the host gives and needs no settings. The server sets its own security headers
 (a strict Content-Security-Policy and `Permissions-Policy: hid=(self)`).
 
 ## How it works
