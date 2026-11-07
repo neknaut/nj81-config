@@ -12,6 +12,9 @@ const TEXT = {
     shareConfigs: "Cấu hình NJ81-ED",
     shareNote: "Chỉ đọc, không cần tài khoản. Ảnh và GIF: của mọi bàn phím. Cấu hình (đèn + phím): chỉ những cấu hình chia sẻ từ NJ81-ED.",
     shareNewest: "Mới nhất",
+    sharePage: "Trang",
+    sharePrev: "Trang trước",
+    shareNext: "Trang sau",
     sharePopular: "Nổi bật",
     shareMostDownloaded: "Nhiều lượt tải",
     shareRefresh: "Tìm cấu hình mới",
@@ -268,6 +271,9 @@ const TEXT = {
     shareConfigs: "NJ81-ED settings",
     shareNote: "Read only, no account. Pictures and GIFs: from every keyboard. Settings (lighting + keys): only those shared from an NJ81-ED.",
     shareNewest: "Newest",
+    sharePage: "Page",
+    sharePrev: "Previous page",
+    shareNext: "Next page",
     sharePopular: "Featured",
     shareMostDownloaded: "Most downloaded",
     shareRefresh: "Look for new settings",
@@ -526,6 +532,7 @@ export const setLanguage = (language, root = document) => {
   root.querySelectorAll("[data-i18n]").forEach((el) => { el.textContent = t(el.dataset.i18n); });
   root.querySelectorAll("[data-i18n-placeholder]").forEach((el) => { el.placeholder = t(el.dataset.i18nPlaceholder); });
   root.querySelectorAll("[data-i18n-title]").forEach((el) => { el.title = t(el.dataset.i18nTitle); });
+  root.querySelectorAll("[data-i18n-aria]").forEach((el) => { el.setAttribute("aria-label", t(el.dataset.i18nAria)); });
   document.title = t("title");
 };
 

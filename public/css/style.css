@@ -292,10 +292,11 @@ input[type="range"] { accent-color: var(--accent); }
 /* the page numbers under the list, in the middle */
 .share-pages { display: flex; justify-content: center; margin-top: 16px; }
 .share-pager { display: inline-flex; align-items: center; gap: 8px; font-size: 13px; color: var(--muted); }
-.page-numbers { display: inline-flex; align-items: center; gap: 4px; flex-wrap: wrap; justify-content: center; }
-.page-num { min-width: 34px; font-variant-numeric: tabular-nums; }
+.page-numbers { display: inline-flex; align-items: center; gap: 4px; justify-content: center; }
+.page-num, .page-arrow { min-width: 36px; min-height: 36px; padding: 0 8px; font-variant-numeric: tabular-nums; }   /* touch-sized */
+.page-arrow { font-size: 18px; line-height: 1; }
 .page-num[aria-current="page"] { background: var(--accent-bg); border-color: var(--accent); color: var(--accent); }
-.page-gap { min-width: 20px; text-align: center; color: var(--dim); }
+.page-gap { width: 36px; text-align: center; color: var(--dim); }   /* as wide as a number: the pager keeps its width
 /* Newest / Featured: tabs with an underline (the Pictures / Settings switch above stays as chips) */
 .seg { display: inline-flex; gap: 4px; border-bottom: 1px solid var(--line); }
 .seg button { background: transparent; border: 0; border-bottom: 2px solid transparent; border-radius: 0; padding: 8px 12px; color: var(--muted); font-weight: 600; margin-bottom: -1px; }

@@ -161,26 +161,33 @@ export const keyboardPreview = (light, lightPic) => {
   return canvas;
 };
 
-/* The pages to show as numbers: the first two, the last two, and the current one with its neighbours; "…" where pages are
-   left out (a single left-out page is shown instead of "…", which would take the same room). */
-export const pageList = (current, total) => {
-  const keep = new Set([1, 2, total - 1, total, current - 1, current, current + 1].filter((p) => p >= 1 && p <= total));
-  const pages = [...keep].sort((a, b) => a - b);
-  const out = [];
-  pages.forEach((p, i) => {
-    const gap = i ? p - pages[i - 1] : 1;
-    if (gap === 2) { out.push(p - 1); } else if (gap > 2) { out.push("…"); }
-    out.push(p);
-  });
-  return out;
+/* The page numbers, as the usual pagination components lay them out (MUI's usePagination: boundaryCount 1, siblingCount 1):
+   the first and last page, the current one with a neighbour on each side, "…" for the rest; a "…" that would hide one page
+   shows that page instead. The count of items stays the same (7 with siblings 1) wherever the current page is, so the
+   numbers and the arrows never move under the pointer. siblings 0 on a narrow screen (5 items). */
+const range = (a, b) => Array.from({ length: Math.max(0, b - a + 1) }, (_, i) => a + i);
+export const pageList = (current, total, siblings = 1) => {
+  const boundary = 1;
+  const start = range(1, Math.min(boundary, total));
+  const end = range(Math.max(total - boundary + 1, boundary + 1), total);
+  const from = Math.max(Math.min(current - siblings, total - boundary - siblings * 2 - 1), boundary + 2);
+  const to = Math.min(Math.max(current + siblings, boundary + siblings * 2 + 2), end.length ? end[0] - 2 : total - 1);
+  return [
+    ...start,
+    ...(from > boundary + 2 ? ["…"] : boundary + 1 < total - boundary ? [boundary + 1] : []),
+    ...range(from, to),
+    ...(to < total - boundary - 1 ? ["…"] : total - boundary > boundary ? [total - boundary] : []),
+    ...end,
+  ];
 };
-/* Fills a pager: ‹ 1 2 … 7 8 9 … 14 15 › with the current page marked; go(page) on a click. */
-const pageNumbers = (box, current, total, go) => {
-  box.replaceChildren(...pageList(current, total).map((p) => {
-    if (p === "…") { return Object.assign(document.createElement("span"), { className: "page-gap", textContent: "…" }); }
+const narrow = () => globalThis.matchMedia?.("(max-width: 520px)").matches ?? false;
+/* Fills a pager with the numbers; the current page marked (aria-current), go(page) on a click. */
+const pageNumbers = (box, current, total, go, label) => {
+  box.replaceChildren(...pageList(current, total, narrow() ? 0 : 1).map((p) => {
+    if (p === "…") { return Object.assign(document.createElement("span"), { className: "page-gap", textContent: "…", ariaHidden: "true" }); }
     const b = Object.assign(document.createElement("button"), { type: "button", className: "small-btn page-num", textContent: String(p) });
+    b.setAttribute("aria-label", `${label} ${p}`);
     if (p === current) { b.setAttribute("aria-current", "page"); }
-    b.setAttribute("aria-label", `${p}`);
     b.addEventListener("click", () => { if (p !== current) { go(p); } });
     return b;
   }));
@@ -326,7 +333,7 @@ export const initShare = (ctx) => {
   function pagerState() {
     $("share-img-prev").disabled = state.imgPage <= 1;
     $("share-img-next").disabled = state.imgPage >= state.imgPages;
-    pageNumbers($("share-img-page"), state.imgPage, state.imgPages, (p) => turn(0, p));
+    pageNumbers($("share-img-page"), state.imgPage, state.imgPages, (p) => turn(0, p), t("sharePage"));
   }
   const card = (item, file) => {
     const image = item.bit_image;
@@ -450,7 +457,7 @@ export const initShare = (ctx) => {
     if (state.cfgOrder === "count") { list.sort((a, b) => (b.downloadTimes ?? 0) - (a.downloadTimes ?? 0)); }
     const pages = Math.max(1, Math.ceil(list.length / 10));
     state.cfgPage = Math.min(state.cfgPage, pages);
-    pageNumbers($("share-cfg-page"), state.cfgPage, pages, (p) => { state.cfgPage = p; renderConfigs(); });
+    pageNumbers($("share-cfg-page"), state.cfgPage, pages, (p) => { state.cfgPage = p; renderConfigs(); }, t("sharePage"));
     remember();
     $("share-cfg-prev").disabled = state.cfgPage <= 1;
     $("share-cfg-next").disabled = state.cfgPage >= pages;

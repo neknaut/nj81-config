@@ -839,7 +839,7 @@ const detectNj81 = async () => {
   startWatching();
   // like the official driver, the clock is set on every connect, but a little later: it is a flash write too, and the
   // lighting must not wait a second behind it right after connecting
-  if (display) { scheduleClock(5000); }
+  if (display) { clockSentThisConnection = false; scheduleClock(5000); }
   updateScreenControls();
   return true;
 };
@@ -857,11 +857,14 @@ const measureClock = async () => {
   return false;
 };
 
+/* The clock is sent once per connection (a few seconds after connecting, when the lighting is idle) and when the user
+   presses Sync clock; never on a timer. A press before the automatic send replaces it. */
 let clockTimer = null;
+let clockSentThisConnection = false;
 const scheduleClock = (delayMs) => {
   clearTimeout(clockTimer);
   clockTimer = setTimeout(() => {
-    if (!nj) { return; }
+    if (!nj || clockSentThisConnection) { return; }
     if (njBusy || njDirty || screenBusy || Date.now() - lastLocalChange < 5000) { scheduleClock(2000); return; }   // lighting first: only when idle for 5 s
     syncClock();
   }, delayMs);
@@ -872,6 +875,8 @@ let clockBusy = false;
 let clockDoneAt = 0;
 const syncClock = async () => {
   if (clockBusy || Date.now() - clockDoneAt < 3000) { return; }
+  clearTimeout(clockTimer);   // done now: the automatic send is not needed any more
+  clockSentThisConnection = true;
   clockBusy = true;
   try {
     const fromServer = await measureClock();
