@@ -129,4 +129,23 @@ server.on("error", (error) => {
 });
 server.listen(PORT, HOST, () => {
   console.log(`NJ81 Config: http://localhost:${PORT}/  (open it in Chrome or Edge; Ctrl+C to stop)`);
+  keepAlive();
 });
+
+/* Keep-alive (as the slack-bot does): a free Render web service sleeps after 15 minutes without a visit, and the next visitor
+   then waits ~50 s. Every KEEPALIVE_MINUTES (10) the server visits its own public address, which Render sets in
+   RENDER_EXTERNAL_URL; nothing happens locally (no such variable) or with KEEPALIVE=0. A sleeping service cannot wake itself:
+   this only keeps an awake one awake. */
+function keepAlive() {
+  const base = (process.env.KEEPALIVE_URL || process.env.RENDER_EXTERNAL_URL || "").replace(/\/+$/, "");
+  if (!base || process.env.KEEPALIVE === "0") { return; }
+  const minutes = Math.max(1, Number(process.env.KEEPALIVE_MINUTES) || 10);
+  const ping = async () => {
+    try {
+      const answer = await fetch(`${base}/keydous/ping`, { signal: AbortSignal.timeout(30_000), headers: { "User-Agent": "nj81-config keep-alive" } });
+      if (answer.status !== 204) { console.warn(`keep-alive: ${base} answered ${answer.status}`); }
+    } catch (error) { console.warn(`keep-alive: ${error.message}`); }
+  };
+  setInterval(ping, minutes * 60_000).unref();
+  console.log(`keep-alive: ${base}/keydous/ping every ${minutes} min`);
+}

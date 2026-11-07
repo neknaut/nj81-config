@@ -73,6 +73,13 @@ most 4 at a time to Keydous and 120 a minute per visitor. It is not an open prox
 
 **Render:** **New → Blueprint**, pick this repo. [`render.yaml`](render.yaml) creates a Node web service (`node server.mjs`, no
 build, `HOST=0.0.0.0`) on Render's HTTPS. The free plan sleeps when unused: the first visit after a while takes ~30 s.
+**Keep-alive** (as the slack-bot): a free web service sleeps after 15 minutes without a visit, and the next visitor waits
+~50 s. Every 10 minutes the server visits its own `/keydous/ping` at the address Render gives it (`RENDER_EXTERNAL_URL`), so it
+stays awake. Locally nothing happens. `KEEPALIVE=0` turns it off, `KEEPALIVE_MINUTES` changes the interval, `KEEPALIVE_URL`
+sets the address on other hosts. Note: Render's free plan has 750 instance hours a month for the whole workspace; one service
+kept awake uses ~720 of them, so two kept-awake free services (e.g. this and the slack-bot) run out before the month ends.
+A service that is already asleep cannot wake itself: an external cron hitting the site every few minutes covers that.
+
 If you made the old static site from an earlier `render.yaml`, delete it and create the Blueprint again (a static site cannot
 run `server.mjs`).
 
