@@ -121,7 +121,7 @@ npm test      # node --test: protocol, keys and macros, lighting, profiles, tran
 
 | Path | Contents |
 |---|---|
-| [`server.mjs`](server.mjs) | Static server, security headers, the Library's `/keydous/*` requests, keep-alive |
+| [`server.mjs`](server.mjs) | Static server (brotli/gzip, ETag so a repeat visit downloads only what changed), security headers, the Library's `/keydous/*` requests, keep-alive |
 | [`public/js/royuan.js`](public/js/royuan.js) | The NJ81 vendor protocol: identify, lighting, clock, screen, key map, Fn layer, macros |
 | [`public/js/app.js`](public/js/app.js) | Wires the page together: tabs, lighting, screen, profiles, loading |
 | [`public/js/keymap.js`](public/js/keymap.js), [`keys-ui.js`](public/js/keys-ui.js) | Key and macro encoding; the Keys and Macro tabs |
@@ -130,6 +130,7 @@ npm test      # node --test: protocol, keys and macros, lighting, profiles, tran
 | [`public/js/hid.js`](public/js/hid.js) | WebHID connection |
 | [`public/js/lighting-nj81.js`](public/js/lighting-nj81.js), [`layout.js`](public/js/layout.js) | The keyboard drawing and its effects |
 | [`public/js/i18n.js`](public/js/i18n.js), [`guide.js`](public/js/guide.js), [`gallery.js`](public/js/gallery.js) | Translations, the Guide tab, built-in pictures |
+| [`public/js/fonts.js`](public/js/fonts.js) | Adds the Google Fonts stylesheet without holding back the first paint |
 | [`scripts/og-image.mjs`](scripts/og-image.mjs) | Draws `public/og.png`, the picture shown with a shared link (`node scripts/og-image.mjs`) |
 | [`docs/`](docs) | [Protocol notes](docs/protocol-notes.md), [capturing the official driver](docs/capturing-usb.md) |
 | [`tests/`](tests) | Unit tests |

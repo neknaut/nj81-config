@@ -8,6 +8,7 @@ import { createServer } from "node:http";
 import { readFile, stat } from "node:fs/promises";
 import { extname, join, normalize, resolve, sep } from "node:path";
 import { fileURLToPath } from "node:url";
+import { brotliCompressSync, gzipSync, constants as zlib } from "node:zlib";
 
 const ROOT = resolve(fileURLToPath(new URL("./public/", import.meta.url)));
 /* Nothing to configure. A host (Render, Railway, Fly, Heroku…) gives the port in PORT: then that port, on every interface,
@@ -155,15 +156,45 @@ const keydous = async (request, response, path) => {
 };
 
 /* ---------- the page ---------- */
+/* Text files go out compressed (brotli, else gzip): a third of the size or less. Each is compressed once per version
+   (its ETag) and kept; the public/ folder is small. */
+const COMPRESS = /\.(html|css|js|mjs|json|svg|xml|txt)$/i;
+const packedFiles = new Map();
+const packed = async (file, tag, accept = "") => {
+  if (!COMPRESS.test(file)) { return { body: await readFile(file) }; }
+  let entry = packedFiles.get(file);
+  if (entry?.tag !== tag) {
+    const raw = await readFile(file);
+    entry = {
+      tag,
+      raw,
+      br: brotliCompressSync(raw, { params: { [zlib.BROTLI_PARAM_QUALITY]: 11, [zlib.BROTLI_PARAM_SIZE_HINT]: raw.length } }),
+      gzip: gzipSync(raw, { level: 9 }),
+    };
+    packedFiles.set(file, entry);
+  }
+  if (/\bbr\b/.test(accept)) { return { body: entry.br, encoding: "br" }; }
+  if (/\bgzip\b/.test(accept)) { return { body: entry.gzip, encoding: "gzip" }; }
+  return { body: entry.raw };
+};
+
 const server = createServer(async (request, response) => {
   try {
     const path = decodeURIComponent(new URL(request.url, "http://localhost").pathname);
     if (path.startsWith("/keydous/")) { await keydous(request, response, path); return; }
     let file = normalize(join(ROOT, path));
     if (file !== ROOT && !file.startsWith(ROOT + sep)) { send(response, 403, "Forbidden"); return; }   // no ../ out of public/
-    if ((await stat(file).catch(() => null))?.isDirectory()) { file = join(file, "index.html"); }
-    const body = await readFile(file);
-    send(response, 200, request.method === "HEAD" ? undefined : body, { "Content-Type": TYPES[extname(file).toLowerCase()] ?? "application/octet-stream", "Cache-Control": "no-cache" });
+    let info = await stat(file).catch(() => null);
+    if (info?.isDirectory()) { file = join(file, "index.html"); info = await stat(file); }
+    if (!info) { await readFile(file); }   // throws ENOENT: a 404
+    // "no-cache" = ask every time; the ETag lets the browser keep its copy (304, no body) until the file changes
+    const tag = `"${info.size.toString(36)}-${Math.floor(info.mtimeMs).toString(36)}"`;
+    const headers = { "Content-Type": TYPES[extname(file).toLowerCase()] ?? "application/octet-stream", "Cache-Control": "no-cache", ETag: tag };
+    if (request.headers["if-none-match"]?.split(/,\s*/).includes(tag)) { send(response, 304, undefined, headers); return; }
+    const { body, encoding } = await packed(file, tag, request.headers["accept-encoding"]);
+    if (encoding) { headers["Content-Encoding"] = encoding; }
+    if (COMPRESS.test(file)) { headers.Vary = "Accept-Encoding"; }
+    send(response, 200, request.method === "HEAD" ? undefined : body, headers);
   } catch (error) {
     if (response.headersSent || response.destroyed || error.name === "AbortError") { if (!response.writableEnded) { response.destroy(); } return; }
     const missing = error.code === "ENOENT";
