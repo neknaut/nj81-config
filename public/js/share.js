@@ -9,6 +9,7 @@
 import { KEYS, LAYOUT_HEIGHT, LAYOUT_WIDTH } from "./layout.js";
 import { REACTIVE_DEFAULT, nj81KeyColor } from "./lighting-nj81.js";
 import { HID_KEYS } from "./keymap.js";
+import { drawSharp, keepSharp, stopSharp } from "./sharp.js";
 
 /* Where the Library's three calls go. Through the app's own server (server.mjs, /keydous/*) when it is there: that works
    on any address, deployed or local. Straight to the Keydous servers only at http://localhost:8080 with no such server
@@ -256,15 +257,15 @@ export const initShare = (ctx) => {
     if (!blob) { throw new Error(failure); }
     const type = typeOf(image);
     const url = URL.createObjectURL(blob.type === type ? blob : new Blob([blob], { type }));
-    const pic = new Image();
-    pic.src = url;
-    await pic.decode().catch(() => {});   // decoded now, not when the page is shown
-    const file = { url, type };
+    // the first frame decoded now, not when the page is shown; the bytes kept for playing a GIF frame by frame
+    const first = await createImageBitmap(blob).catch(() => null);
+    const file = { url, type, first, data: type === "image/gif" ? await blob.arrayBuffer() : null };
     files.set(image.md5, file);
     for (const [md5, old] of files) {
       if (files.size <= FILES) { break; }
       if (state.onShow.has(md5)) { continue; }
       URL.revokeObjectURL(old.url);
+      old.first?.close();
       files.delete(md5);
     }
     return file;
@@ -349,6 +350,7 @@ export const initShare = (ctx) => {
       state.imgPages = total;
       if (state.imgPage > total) { state.imgPage = total; return loadImages(); }   // a kept page that no longer exists
       state.onShow = new Set(items.map(({ item }) => item.bit_image.md5));
+      for (const old of box.querySelectorAll("canvas")) { stopSharp(old); }   // the page left: its pictures no longer redrawn
       box.replaceChildren(...items.map(({ item, file }) => card(item, file)));
       state.shown = key;
       const bar = $("share-images-box").querySelector(".share-bar");
@@ -368,6 +370,41 @@ export const initShare = (ctx) => {
     $("share-img-next").disabled = state.imgPage >= state.imgPages;
     pageNumbers($("share-img-page"), state.imgPage, state.imgPages, (p) => turn(0, p), t("sharePage"));
   }
+  /* A picture in its card, drawn sharp (sharp.js); a GIF plays frame by frame, only while its card is on screen and the
+     browser tab is in front. A card taken off the page stops its GIF. */
+  const playPicture = (view, file) => {
+    let still = file.first;
+    const draw = () => { if (still) { drawSharp(view, still); } };
+    keepSharp(view, draw);
+    draw();
+    if (!file.data || typeof ImageDecoder !== "function") { return; }
+    (async () => {
+      const decoder = new ImageDecoder({ data: file.data, type: file.type });
+      try {
+        await decoder.tracks.ready;
+        try { await decoder.completed; } catch (error) { /* a broken tail: the frames read so far */ }
+        const count = decoder.tracks.selectedTrack.frameCount;
+        if (count < 2) { return; }
+        let index = 0;
+        while (view.isConnected) {
+          const seen = !document.hidden && view.getBoundingClientRect().width > 0;
+          if (!seen) { await new Promise((wake) => { setTimeout(wake, 400); }); continue; }
+          index = (index + 1) % count;
+          const { image } = await decoder.decode({ frameIndex: index });
+          const ms = Math.max(20, (image.duration ?? 100000) / 1000);
+          if (still !== file.first) { still.close(); }
+          still = image;
+          draw();
+          await new Promise((wake) => { setTimeout(wake, ms); });
+        }
+      } catch (error) { /* a GIF that cannot be played stays on its first frame */ }
+      finally {
+        if (!view.isConnected) { stopSharp(view); }
+        if (still && still !== file.first) { still.close?.(); }
+        decoder.close();
+      }
+    })();
+  };
   const card = (item, file) => {
     const image = item.bit_image;
     const el = document.createElement("figure");
@@ -376,7 +413,7 @@ export const initShare = (ctx) => {
     const meta = Object.assign(document.createElement("figcaption"), { className: "share-meta" });
     meta.append(
       Object.assign(document.createElement("strong"), { textContent: image.title || "—" }),
-      Object.assign(document.createElement("span"), { textContent: `${item.user_name || "?"} · ${image.screen_type || ""} · ${image.width}×${image.height} · ↓${image.download_times ?? 0}` }),
+      Object.assign(document.createElement("span"), { textContent: metaText(item) }),
     );
     const use = Object.assign(document.createElement("button"), { type: "button", className: "small-btn", textContent: t("shareUsePicture") });
     use.disabled = true;
@@ -385,22 +422,51 @@ export const initShare = (ctx) => {
     file.then((got) => {
       shot.classList.remove("loading");
       if (!got) { shot.textContent = "✕"; return; }
-      const { url, type } = got;
-      const img = Object.assign(document.createElement("img"), { src: url, alt: image.title || "" });
-      img.addEventListener("load", () => img.classList.add("in"), { once: true });
-      if (img.complete) { img.classList.add("in"); }
-      shot.append(img);
+      const view = Object.assign(document.createElement("canvas"), { className: "in" });
+      view.setAttribute("role", "img");
+      view.setAttribute("aria-label", image.title || "");
+      shot.append(view);
+      playPicture(view, got);
+      // a click (or Enter / Space) on the picture opens it big
+      shot.tabIndex = 0;
+      shot.setAttribute("role", "button");
+      shot.title = t("sharePreview");
+      shot.addEventListener("click", () => openPreview(item, got));
+      shot.addEventListener("keydown", (event) => { if (event.key === "Enter" || event.key === " ") { event.preventDefault(); openPreview(item, got); } });
       use.disabled = false;
-      use.addEventListener("click", async () => {
-        cancelAll();
-        const typed = await (await fetch(url)).blob();
-        const name = `${(image.title || "share").replace(/[\\/:*?"<>|]+/g, " ").trim() || "share"}.${type === "image/gif" ? "gif" : "png"}`;
-        usePicture(new File([typed], name, { type }));
-        logOk("areaShare", `${t("sharePictureTaken")}: ${image.title || name} (${item.user_name || "?"})`);
-      });
+      use.addEventListener("click", () => takePicture(item, got));
     }, () => { /* the page was left: its cards are gone */ });
     return el;
   };
+  const metaText = (item) => {
+    const image = item.bit_image;
+    return `${item.user_name || "?"} · ${image.screen_type || ""} · ${image.width}×${image.height} · ↓${image.download_times ?? 0}`;
+  };
+  /* "Use this picture": the picture goes to the Screen tab and is applied to the keyboard at once (app.js shows how far). */
+  const takePicture = async (item, file) => {
+    const image = item.bit_image;
+    const { url, type } = file;
+    cancelAll();
+    const typed = await (await fetch(url)).blob();
+    const name = `${(image.title || "share").replace(/[\\/:*?"<>|]+/g, " ").trim() || "share"}.${type === "image/gif" ? "gif" : "png"}`;
+    logOk("areaShare", `${t("sharePictureTaken")}: ${image.title || name} (${item.user_name || "?"})`);
+    await usePicture(new File([typed], name, { type }));
+  };
+  /* A picture opened big, a GIF playing; a new canvas each time (the one before stops playing when it leaves the page). */
+  const openPreview = (item, file) => {
+    const dialog = $("share-preview");
+    const view = document.createElement("canvas");
+    view.setAttribute("role", "img");
+    view.setAttribute("aria-label", item.bit_image.title || "");
+    $("preview-shot").replaceChildren(view);
+    $("preview-title").textContent = item.bit_image.title || "—";
+    $("preview-meta").textContent = metaText(item);
+    $("preview-use").onclick = () => { dialog.close(); takePicture(item, file); };
+    dialog.showModal();
+    playPicture(view, file);
+  };
+  $("share-preview").addEventListener("close", () => $("preview-shot").replaceChildren());
+  $("share-preview").addEventListener("click", (event) => { if (event.target === $("share-preview")) { $("share-preview").close(); } });   // a click outside the box
 
   /* ---------- NJ81-ED settings ---------- */
   const readCache = () => { try { return JSON.parse(localStorage.getItem(CACHE_KEY) || "null"); } catch (error) { return null; } };

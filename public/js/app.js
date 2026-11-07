@@ -9,6 +9,7 @@ import { initKeys } from "./keys-ui.js";
 import { REACTIVE_DEFAULT, nj81KeyColor } from "./lighting-nj81.js";
 import { currentLanguage, languages, setLanguage, t } from "./i18n.js";
 import { renderGuide } from "./guide.js";
+import { drawSharp, keepSharp } from "./sharp.js";
 import { initShare } from "./share.js";
 import { decodeAction, describeAction, keyLabel } from "./keymap.js";
 
@@ -234,6 +235,7 @@ const buildKeyboard = () => {
     width: `calc(${(SCREEN_TILE.w / LAYOUT_WIDTH) * 100}% - 3px)`, height: `calc(${(SCREEN_TILE.h / LAYOUT_HEIGHT) * 100}% - 3px)`,
   });
   surface.appendChild(tile);
+  keepSharp(tile, () => drawSharp(tile, $("screen-canvas")));
   box.replaceChildren(surface);
 };
 
@@ -298,16 +300,106 @@ const drawScreen = () => {
     const scale = fit(width / screenPixels.width, height / screenPixels.height);
     const w = screenPixels.width * scale;
     const h = screenPixels.height * scale;
-    context.drawImage(screenPixels, (width - w) / 2, (height - h) / 2, w, h);
+    clampShift();
+    // a picture bigger than the screen is brought down with the best smoothing (the bytes sent are these pixels)
+    context.imageSmoothingEnabled = true;
+    context.imageSmoothingQuality = "high";
+    context.drawImage(screenPixels, Math.round((width - w) / 2 + screenShift.x), Math.round((height - h) / 2 + screenShift.y), w, h);
   } else {
     GALLERY[0].draw(context, width, height);   // the default picture: "Nek NauT", white on black
   }
+  // shown sharp (sharp.js): the preview and the screen on the keyboard drawing
+  if (screenPixels) { drawSharp($("screen-view"), canvas); } else { drawSharp($("screen-view"), { width: 0, height: 0 }); }
   const tile = $("screen-tile");
-  if (tile) {
-    tile.width = width;
-    tile.height = height;
-    tile.getContext("2d").drawImage(canvas, 0, 0);
-  }
+  if (tile) { drawSharp(tile, canvas); }
+  const room = shiftRoom();
+  const movable = Boolean(screenPixels) && (room.x >= 0.5 || room.y >= 0.5);
+  $("screen-view").classList.toggle("movable", movable);
+  $("screen-move").hidden = !screenPixels;
+  $("screen-empty").hidden = Boolean(screenPixels);
+  $("screen-view").closest(".screen-frame").classList.toggle("empty", !screenPixels);
+  $("screen-center").disabled = !movable || (!screenShift.x && !screenShift.y);
+};
+
+/* The picture moved by hand from the centre (in screen pixels): a picture of another shape than the screen is cropped
+   (Fill) or has bars (Fit); it can be dragged within that room, up / down / left / right. */
+let screenShift = { x: 0, y: 0 };
+const shiftRoom = () => {
+  if (!screenPixels) { return { x: 0, y: 0 }; }
+  const { width, height } = profile.screen;
+  const fit = $("screen-fit").value === "contain" ? Math.min : Math.max;
+  const scale = fit(width / screenPixels.width, height / screenPixels.height);
+  return { x: Math.abs(screenPixels.width * scale - width) / 2, y: Math.abs(screenPixels.height * scale - height) / 2 };
+};
+const clampShift = () => {
+  const room = shiftRoom();
+  screenShift = { x: Math.max(-room.x, Math.min(room.x, screenShift.x)), y: Math.max(-room.y, Math.min(room.y, screenShift.y)) };
+};
+const moveScreen = (x, y) => {
+  screenShift = { x, y };
+  drawScreen();
+  markPending(true);
+};
+const wireScreenMove = () => {
+  const view = $("screen-view");
+  keepSharp(view, () => drawScreen());
+  const pick = () => $("screen-file").click();
+  // a click (no drag) chooses a picture; a drag moves the picture on show
+  let drag = null;
+  view.addEventListener("pointerdown", (event) => {
+    if (event.button !== 0) { return; }
+    event.preventDefault();   // no text selected while dragging
+    view.focus();
+    view.setPointerCapture(event.pointerId);
+    drag = { x: event.clientX, y: event.clientY, from: { ...screenShift }, per: profile.screen.width / view.clientWidth, far: false };
+  });
+  view.addEventListener("pointermove", (event) => {
+    if (!drag) { return; }
+    if (Math.hypot(event.clientX - drag.x, event.clientY - drag.y) > 4) { drag.far = true; }
+    if (!drag.far || !view.classList.contains("movable")) { return; }
+    view.classList.add("dragging");
+    screenShift = { x: drag.from.x + (event.clientX - drag.x) * drag.per, y: drag.from.y + (event.clientY - drag.y) * drag.per };
+    drawScreen();
+  });
+  const drop = (event) => {
+    if (!drag) { return; }
+    const { far, from } = drag;
+    drag = null;
+    view.classList.remove("dragging");
+    if (!far) { if (event.type === "pointerup") { pick(); } return; }
+    if (screenShift.x !== from.x || screenShift.y !== from.y) { moveScreen(Math.round(screenShift.x), Math.round(screenShift.y)); }
+  };
+  view.addEventListener("pointerup", drop);
+  view.addEventListener("pointercancel", drop);
+  // a file dropped on the preview
+  const frame = view.closest(".screen-frame");
+  frame.addEventListener("dragover", (event) => { if ([...event.dataTransfer.types].includes("Files")) { event.preventDefault(); frame.classList.add("drop"); } });
+  frame.addEventListener("dragleave", () => frame.classList.remove("drop"));
+  frame.addEventListener("drop", async (event) => {
+    event.preventDefault();
+    frame.classList.remove("drop");
+    const file = [...event.dataTransfer.files].find((f) => f.type.startsWith("image/"));
+    if (!file) { return; }
+    try { await loadScreenFile(file); } catch (error) { logError("areaScreen", `${t("importFailed")}: ${error.message}`); }
+  });
+  view.addEventListener("keydown", (event) => {
+    if (event.key === "Enter" || event.key === " ") { event.preventDefault(); pick(); return; }
+    const step = event.shiftKey ? 10 : 1;
+    const by = { ArrowLeft: [-step, 0], ArrowRight: [step, 0], ArrowUp: [0, -step], ArrowDown: [0, step] }[event.key];
+    if (!by || !view.classList.contains("movable")) { return; }
+    event.preventDefault();
+    event.stopPropagation();
+    moveScreen(Math.round(screenShift.x) + by[0], Math.round(screenShift.y) + by[1]);
+  });
+  $("screen-center").addEventListener("click", () => moveScreen(0, 0));
+};
+
+/* Apply works only with a picture chosen (a file, a built-in picture or one from the Library), not while sending; it
+   glows when the picture on show has not been sent yet. */
+let screenSending = false;
+const markPending = (on) => {
+  if (on !== undefined) { $("screen-send").classList.toggle("pending", on); }
+  $("screen-send").disabled = screenSending || !screenPixels;
 };
 
 /* ---------- GIFs: every frame is decoded and played in the preview; the frame on show is the one sent ---------- */
@@ -357,8 +449,9 @@ const stopGif = () => {
 const syncLayerBox = () => { $("screen-slot-box").hidden = !(nj?.model?.screen?.slots > 1) || Boolean(gif); };
 
 const setScreenSource = (source, name) => {
-  $("screen-send").classList.add("pending");
   screenPixels = source;
+  screenShift = { x: 0, y: 0 };
+  markPending(true);
   syncLayerBox();
   profile.screen.name = name;
   $("screen-name").textContent = `${name} · ${source.width}×${source.height} → ${profile.screen.width}×${profile.screen.height}`;
@@ -383,14 +476,14 @@ const restoreChosen = async () => {
   if (choice.gallery) {
     const item = GALLERY.find((g) => g.id === choice.gallery);
     const button = item && [...$("gallery").children].find((b) => b.title === item.name);
-    if (button) { stopGif(); screenFile = null; setScreenSource(button.querySelector("canvas"), item.name); $("screen-send").classList.remove("pending"); }
+    if (button) { stopGif(); screenFile = null; setScreenSource(button.source, item.name); markPending(false); }
     return;
   }
   const kept = await pictureStore("readonly", (store) => store.get(CHOSEN_KEY));
   if (!kept?.blob) { return; }
   try {
     await loadScreenFile(new File([kept.blob], kept.name || "picture", { type: kept.type || kept.blob.type }), { restored: true });
-    $("screen-send").classList.remove("pending");
+    markPending(false);
   } catch (error) { /* a broken entry: the default picture stays */ }
 };
 
@@ -430,7 +523,10 @@ const buildGallery = () => {
     button.type = "button";
     button.className = "thumb";
     button.title = item.name;
-    button.append(canvas, Object.assign(document.createElement("span"), { textContent: item.name }));
+    button.source = canvas;   // the 160×80 picture; the button shows it sharp at its own size
+    const view = document.createElement("canvas");
+    keepSharp(view, () => drawSharp(view, canvas));
+    button.append(view, Object.assign(document.createElement("span"), { textContent: item.name }));
     button.addEventListener("click", () => { stopGif(); screenFile = null; setScreenSource(canvas, item.name); rememberChosen({ gallery: item.id }); });
     return button;
   });
@@ -528,29 +624,31 @@ let screenBusy = false;
 const clearScreenAll = async () => {
   if (!nj?.display || nj.client.family !== "yc500") { return; }
   if (!(await confirmModal({ title: t("clearAllTitle"), text: t("clearAllConfirm"), ok: t("clearAllOk"), danger: true }))) { return; }
+  await withProgress({ title: t("clearingAll"), text: "", done: t("clearedAll"), run: clearScreenNow });
+};
+const clearScreenNow = async (report) => {
   stopGif();
+  let cleared = false;
   $("screen-clear-all").disabled = true;
   screenBusy = true;
   log(t("clearingAll"), "info", "areaScreen");
-  const bar = $("screen-progress");
-  bar.max = 100;
-  bar.value = 0;
-  bar.hidden = false;
-  const name = $("screen-name");
   try {
-    const { ms, confirmed } = await nj.client.clearScreen({ progress: (f) => { bar.value = Math.round(f * 100); name.textContent = `${t("clearingAll")} ${Math.round(f * 100)}%`; } });
+    const { ms, confirmed } = await nj.client.clearScreen({ progress: report });   // how far: only in the modal
     for (let slot = 0; slot < 8; slot += 1) { try { localStorage.removeItem(pictureKey(slot)); } catch (error) { /* private mode */ } }
     forgetFiles(8);
     screenFile = null;
     screenPixels = null;
+    screenShift = { x: 0, y: 0 };
+    markPending(false);
     $("screen-name").textContent = t("noPictureSent");
     drawScreen();
     const secs = (ms / 1000).toFixed(1);
     logOk("areaScreen", confirmed ? `${t("clearedAll")} (${secs} s)` : `${t("clearedAll")} · ${t("clearedNoConfirm")}`);
+    cleared = true;
   } catch (error) { logError("areaScreen", `${t("applyFailed")}: ${why(error)}`); }
-  bar.hidden = true;
   screenBusy = false;
   $("screen-clear-all").disabled = false;
+  return cleared;
 };
 
 /* NJ81-ED: the picture, or every frame of the GIF (at most TFT.MAX_FRAMES; a longer GIF keeps every n-th frame), drawn
@@ -575,9 +673,9 @@ const sendScreenNj81Ed = async (slot, capture, progress) => {
     frames.push(Uint8ClampedArray.from(capture()));
   }
   const delayMs = frames.length > 1 ? totalMs / frames.length : 0;
-  const bar = $("screen-progress");
-  bar.hidden = false;
-  $("screen-send").disabled = true;
+  screenSending = true;
+  markPending();
+  let sent = false;
   try {
     const { count, delay } = await nj.client.uploadScreen(frames, nj.model.screen, { layer: slot, delayMs, progress });
     logOk("areaScreen", count > 1 ? `${t("animationSent")} (${count} ${t("gifFrames")}, ${delay} ms/${t("gifFrame").toLowerCase()})` : t("pictureSentScreen"));
@@ -587,15 +685,15 @@ const sendScreenNj81Ed = async (slot, capture, progress) => {
     first.getContext("2d").putImageData(new ImageData(frames[0], width, height), 0, 0);
     rememberPicture(first, slot);
     if (screenFile) { rememberFile(screenFile, slot); } else { forgetFiles(1); }   // a library picture: the still above is enough
+    sent = true;
   } catch (error) { logError("areaScreen", `${t("applyFailed")}: ${why(error)}`); }
-  $("screen-send").disabled = false;
-  $("screen-send").textContent = t("screenSend");
-  bar.hidden = true;
-  $("screen-send").classList.remove("pending");
+  screenSending = false;
+  if (sent) { markPending(false); } else { markPending(); }   // not sent: it still glows, to try again
+  return sent;
 };
 
-const sendPicture = async () => {
-  if (!nj?.model?.screen) { logWarn("areaScreen", t("screenNeedsKeyboard")); return; }
+const sendPicture = async ({ report } = {}) => {
+  if (!nj?.model?.screen) { logWarn("areaScreen", t("screenNeedsKeyboard")); return false; }
   const { width, height } = nj.model.screen;
   readForm();
   profile.screen.width = width;
@@ -604,13 +702,8 @@ const sendPicture = async () => {
   const canvas = $("screen-canvas");
   const capture = () => canvas.getContext("2d", { willReadFrequently: true }).getImageData(0, 0, width, height).data;
   const slot = gif ? 0 : Number($("screen-slot").value) || 0;   // a still picture: its layer; a GIF: no layer (always the first)
-  const bar = $("screen-progress");
-  const progress = (done, total) => {
-    bar.max = total;
-    bar.value = done;
-    $("screen-send").textContent = `${t("screenSending")} ${Math.round((done / total) * 100)}%`;
-  };
-  if (nj.client.family === "yc500") { await sendScreenNj81Ed(slot, capture, progress); return; }
+  const progress = (done, total) => { report?.(done / total); };   // how far: only in the modal
+  if (nj.client.family === "yc500") { return sendScreenNj81Ed(slot, capture, progress); }
   // a GIF goes as an animation: its frames (at most ANIMATION.MAX_FRAMES, long GIFs keep every n-th frame and add up the
   // delays), each drawn as the preview shows it; the preview keeps playing
   let animation = null;
@@ -632,8 +725,9 @@ const sendPicture = async () => {
   sentFrame.width = width;
   sentFrame.height = height;
   sentFrame.getContext("2d").putImageData(new ImageData(data, width, height), 0, 0);
-  bar.hidden = false;
-  $("screen-send").disabled = true;
+  screenSending = true;
+  markPending();
+  let sent = false;
   try {
     if (animation) {
       await nj.client.uploadAnimation(animation, nj.model.screen, progress);
@@ -643,12 +737,46 @@ const sendPicture = async () => {
       logOk("areaScreen", `${t("pictureSent")} ${slot + 1}`);
     }
     rememberPicture(sentFrame, animation ? 0 : slot);
+    sent = true;
   } catch (error) { logError("areaScreen", `${t("applyFailed")}: ${why(error)}`); }
-  $("screen-send").disabled = false;
-  $("screen-send").textContent = t("screenSend");
-  bar.hidden = true;
-  $("screen-send").classList.remove("pending");
+  screenSending = false;
+  if (sent) { markPending(false); } else { markPending(); }
+  return sent;
 };
+
+/* Anything sent to the keyboard with a "how far" (Apply a picture, Clear pictures): a modal with the percentage that
+   cannot be closed while it runs, and closes by itself when done. run(report) reports 0..1 and returns true when done;
+   on a failure the modal stays with a Close button. */
+const withProgress = async ({ title, text, done, run }) => {
+  const dialog = $("apply-dialog");
+  const bar = $("apply-bar");
+  const percent = $("apply-percent");
+  const show = (f) => { const p = Math.max(0, Math.min(100, Math.round(f * 100))); bar.value = p; percent.textContent = `${p}%`; };
+  $("apply-title").textContent = title;
+  $("apply-text").textContent = text;
+  $("apply-text").hidden = !text;
+  $("apply-close").hidden = true;
+  show(0);
+  const hold = (event) => event.preventDefault();   // no Esc while it runs
+  dialog.addEventListener("cancel", hold);
+  if (!dialog.open) { dialog.showModal(); }
+  let ok = false;
+  try { ok = await run(show); } catch (error) { ok = false; }
+  dialog.removeEventListener("cancel", hold);
+  if (ok) {
+    show(1);
+    $("apply-title").textContent = done;
+    setTimeout(() => { if (dialog.open) { dialog.close(); } }, 1200);
+  } else {
+    $("apply-title").textContent = t("applyFailed");
+    $("apply-text").textContent = t("applyFailedLog");
+    $("apply-text").hidden = false;
+    $("apply-close").hidden = false;
+    $("apply-close").focus();
+  }
+  return ok;
+};
+const applyWithModal = (name) => withProgress({ title: t("applyingPicture"), text: name, done: t("pictureApplied"), run: (report) => sendPicture({ report }) });
 
 /* A text box keeps its keys; everywhere else the page swallows them while you try the keyboard. */
 const isTyping = (el) => Boolean(el) && (el.isContentEditable || el.tagName === "TEXTAREA"
@@ -676,11 +804,13 @@ const download = (name, data, type) => {
    show the "connect to start" card; the log is always there. */
 let ready = false;
 const TAB_KEY = "nj81-config.tab";
-/* The tab is kept for F5 only (sessionStorage): closing the page and opening it again starts on Lighting. */
 try { localStorage.removeItem(TAB_KEY); } catch (error) { /* private mode */ }   // kept there by older versions
-/* The tab to open once connected: Lighting, except after an F5, which comes back to the tab that was open. */
+/* The tab on connect: after an F5, the tab that was open (kept in sessionStorage); any other connection (opening the page,
+   "Connect", plugging the cable back in) opens on Lighting. */
 const reloaded = performance.getEntriesByType?.("navigation")?.[0]?.type === "reload";
-let currentTab = (() => { try { const saved = reloaded ? sessionStorage.getItem(TAB_KEY) : null; return ["light", "keys", "macro", "screen", "profile", "share", "log", "guide"].includes(saved) ? saved : "light"; } catch (error) { return "light"; } })();
+const TABS = ["light", "keys", "macro", "screen", "profile", "share", "log", "guide"];
+let currentTab = (() => { try { const saved = reloaded ? sessionStorage.getItem(TAB_KEY) : null; return TABS.includes(saved) ? saved : "light"; } catch (error) { return "light"; } })();
+let keepTabOnce = reloaded;   // only the first connection after the F5 keeps it
 const TAB_SUB = { light: "subLight", keys: "subKeys", macro: "subMacro", screen: "subScreen", profile: "subProfile", share: "subShare", log: "subLog", guide: "subGuide" };
 const TAB_TITLE = { light: "lighting", keys: "keysTab", macro: "macroTab", screen: "screen", profile: "profile", share: "shareTab", log: "log", guide: "guide" };
 /* The Guide is long: it is drawn the first time its tab opens, and again only if the language changed since. */
@@ -696,8 +826,7 @@ const showTab = (tab) => {
   showGuide();
   queueMicrotask(() => { keys?.onTab(tab, ready); if (tab === "share") { share?.onShow(); } else { share?.onHide(); } });
   $("keyboard-panel").hidden = !ready || !["light", "keys", "screen"].includes(tab);
-  /* Without a keyboard there are no tabs: the page shows only how to connect. The tab asked for (Lighting by default, or the
-     one open before an F5 or an unplug) is kept and opens once a keyboard is connected. */
+  /* Without a keyboard there are no tabs: the page shows only how to connect. */
   const waiting = !ready;
   $("nav").hidden = waiting;
   for (const button of document.querySelectorAll("[data-tab]")) {
@@ -711,6 +840,7 @@ const showTab = (tab) => {
   $("page-sub").textContent = t($("page-sub").dataset.i18n);
 };
 const setControlsEnabled = (on) => {
+  if (on && !ready) { if (!keepTabOnce) { currentTab = "light"; } keepTabOnce = false; }   // connected: Lighting, or after an F5 the tab that was open
   ready = on;
   if (!on) { $("confirm-pill").hidden = true; }
   showTab(currentTab);
@@ -800,8 +930,16 @@ const fillEffectOptions = () => {
 /* Keydous NJ81 (vendor protocol): identify the model, then read its current lighting into the form. */
 const detectNj81 = async () => {
   const client = new Royuan(session.featureTransport());
+  // right after an F5 or a replug the keyboard may still be busy (a read of the page before): asked again, a little
+  // later each time, before giving up
   let id;
-  try { id = await client.identify(); } catch (error) { logError("areaConn", `${t("njNoAnswer")} (${error.message})`); return false; }
+  let failure = null;
+  for (let attempt = 0; attempt < 5 && !id; attempt += 1) {
+    if (attempt) { await new Promise((wake) => { setTimeout(wake, 400 * attempt); }); }
+    if (!session.device?.opened) { return false; }   // unplugged or disconnected meanwhile
+    try { id = await client.identify(); } catch (error) { failure = error; }
+  }
+  if (!id) { logError("areaConn", `${t("njNoAnswer")} (${failure?.message})`); return false; }
   const info = $("device-info");
   info.hidden = false;
   info.textContent = `${id.model.name} · id ${id.deviceId} · firmware ${id.firmware}`;
@@ -1178,7 +1316,7 @@ const init = () => {
   }
   // a mouse click must not leave the button focused, or the next key press on the keyboard would trigger it again
   document.addEventListener("click", (event) => { if (event.detail > 0 && event.target.closest("button")) { event.target.closest("button").blur(); } });
-  $("screen-send").addEventListener("click", sendPicture);
+  $("screen-send").addEventListener("click", () => { if (nj?.model?.screen) { applyWithModal(profile.screen.name || ""); } else { sendPicture(); } });
   window.addEventListener("keydown", (event) => {
     showKey(event.code, true);
     // outside a text box a key press only lights the drawing: no scrolling, no menu changes, no browser shortcuts (F11/F12 stay)
@@ -1186,9 +1324,11 @@ const init = () => {
   });
   window.addEventListener("keyup", (event) => showKey(event.code, false));
   window.addEventListener("blur", () => { for (const el of keyEls.values()) { el.classList.remove("down"); } });
-  $("screen-fit").addEventListener("change", (event) => { drawScreen(); event.target.blur(); });
+  $("screen-fit").addEventListener("change", (event) => { drawScreen(); if (screenPixels) { markPending(true); } event.target.blur(); });
+  wireScreenMove();
   $("gif-play").addEventListener("click", () => playGif(!gif?.playing));
   $("screen-clear-all").addEventListener("click", clearScreenAll);
+  $("apply-close").addEventListener("click", () => $("apply-dialog").close());
   $("screen-slot").addEventListener("change", () => showLastPicture());
   $("gif-frame").addEventListener("input", (event) => { if (gif) { playGif(false); showGifFrame(Number(event.target.value)); } });
   buildGallery();
@@ -1196,7 +1336,12 @@ const init = () => {
   share = initShare({
     $, t, logOk, logWarn, logError, why, getNj: () => nj,
     /* a shared picture / GIF goes to the Screen tab, ready to send */
-    usePicture: async (file) => { await loadScreenFile(file); $("screen-send").classList.add("pending"); showTab("screen"); },
+    usePicture: async (file) => {
+      await loadScreenFile(file);
+      markPending(true);
+      if (!nj?.model?.screen || screenSending) { showTab("screen"); return; }   // nothing to send to (or busy): the Screen tab
+      await applyWithModal(file.name);
+    },
     /* a shared lighting setting: into the form, then sent as any change made here */
     applyLight: async (light, name) => {
       if (!nj) { logWarn("areaShare", t("screenNeedsKeyboard")); return; }
