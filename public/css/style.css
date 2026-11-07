@@ -357,8 +357,8 @@ input[type="range"] { accent-color: var(--accent); }
 .modal-box p { margin: 0; color: var(--muted); font-size: 14px; line-height: 1.55; }
 .modal-actions { display: flex; justify-content: flex-end; gap: 10px; margin-top: 6px; flex-wrap: wrap; }
 .modal-actions button { min-width: 96px; }
-button.danger { background: #d9433b; border-color: #d9433b; color: #fff; }
-button.danger:hover { background: #c23a33; }
+button.danger { background: #c8352e; border-color: #c8352e; color: #fff; }   /* white on it: 5.2:1 (WCAG AA needs 4.5) */
+button.danger:hover { background: #b02b25; }
 
 /* Screen preview: drawn sharp (sharp.js). Click it to choose a picture (an empty one says so); a picture of another
    shape can be dragged into place. */
