@@ -333,6 +333,9 @@ input[type="range"] { accent-color: var(--accent); }
 @media (prefers-reduced-motion: reduce) { .spinner { animation-duration: 2.4s; } }
 .app-loading { position: fixed; inset: 0; z-index: 1000; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 14px; background: var(--bg, #0f1115); color: var(--muted); font-weight: 600; transition: opacity 0.3s; }
 .app-loading.done { opacity: 0; pointer-events: none; }
+/* The page under the cover is not drawn until the scripts have filled its text: words put in late would push it about
+   under the cover, a layout shift. When the cover fades the page appears, already in place. */
+.app-loading:not(.done) + .app { visibility: hidden; }
 .share-panel { position: relative; min-height: 320px; }
 .panel-loading { position: absolute; inset: 0; z-index: 5; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 12px; color: var(--muted); font-size: 14px; background: color-mix(in srgb, var(--panel) 75%, transparent); border-radius: 16px; }
 .panel-loading[hidden] { display: none; }
