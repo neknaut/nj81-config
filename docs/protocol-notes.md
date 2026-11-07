@@ -1,8 +1,9 @@
 # NJ81 protocol notes
 
-**Status: known for the gen2 boards** (NJ81-CP, NJ81-CP V3, NJ81-MAX, NJ81-MAX CP). Implemented in `public/js/royuan.js`.
-Source: the public protocol notes of [sharkfin](https://github.com/dniminenn/sharkfin/blob/master/docs/PROTOCOL.md) and its device
-table; the code here is an independent implementation of those facts.
+**Status:** the gen2 boards (NJ81-CP, NJ81-CP V3, NJ81-MAX, NJ81-MAX CP) from the public protocol notes of
+[sharkfin](https://github.com/dniminenn/sharkfin/blob/master/docs/PROTOCOL.md) and its device table (not tested on a real board);
+the **NJ81-ED** (yc500) from the official driver and USB captures, tested on a real keyboard (the sections below the gen2 tables).
+Implemented in `public/js/royuan.js`, an independent implementation of those facts.
 
 | Field | Value |
 |---|---|
@@ -29,14 +30,15 @@ Effects: 1 static, 2 breathing, 3 spectrum, 4 wave (right/left/down/up), 5 rippl
 
 ## Never sent
 
-Reset (`0x01`), flash erase (`0xAC`), boot entry (`0x7F`, `0x30`, `0x31`) and anything firmware related. `packet()`
-refuses these opcodes.
+Reset (`0x01`), `0x02`, the yc500 display erase (`0x2C`), flash erase (`0xAC`), boot entry (`0x7F`, `0x30`, `0x31`) and anything
+firmware related. `packet()` refuses these opcodes. The one exception is the NJ81-ED's Clear (a bare `0xAC`, below), sent only by
+`Royuan.clearScreen()`.
 
 
 **NJ81-ED screen, 2026-11-06:** the screen erase (`0x2C`) was sent once; what it does there is not understood (the status screen
 was missing for a while and still works). Pictures sent at an assumed 160x80 (announce `0xA5` + pages `0x25`) end up in the keyboard's
-screen rotation, and no command is known to take a picture back out (a black frame only replaces it). Nothing is sent to that screen
-until the official driver's picture and delete commands are captured. Never send `0x2C`; `packet()` refuses it.
+screen rotation; a black frame only replaces one. The official driver's picture commands and its Clear were read and captured
+since (below), and they are what the app sends now. `0x2C` is never sent again; `packet()` refuses it.
 
 **NJ81-ED "Clear" in the official driver (Keydous Driver v3.2.23, USB capture 2026-11-06):** one SET_REPORT, feature report ID 0
 (`wValue 0x0300`): `AC 00 00 00 00 00 00 53` (bare `0xAC`, checksum at byte 7), then one GET_REPORT ~20-50 ms later, then nothing.

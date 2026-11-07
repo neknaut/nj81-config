@@ -1,0 +1,5 @@
+User-agent: *
+Allow: /
+Disallow: /keydous/
+
+Sitemap: https://nj81-config.onrender.com/sitemap.xml

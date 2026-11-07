@@ -3,8 +3,47 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>NJ81 Config</title>
-  <meta name="description" content="Edit the RGB lighting and screen of the Keydous NJ81 in the browser with WebHID.">
+  <title>NJ81 Config · Keydous NJ81 web configurator: lighting, keys, macros, screen GIF</title>
+  <meta name="description" content="Configure the Keydous NJ81 / NJ81-ED in Chrome or Edge, no driver to install: RGB lighting, key remaps, macros, screen pictures and GIFs. Cấu hình bàn phím NJ81 ngay trên web.">
+  <meta name="keywords" content="Keydous NJ81, NJ81-ED, NJ81 driver, NJ81 configurator, Keydous driver, NJ81 screen GIF, NJ81 lighting, NJ81 key remap, WebHID keyboard, phần mềm NJ81, driver Keydous, đổi ảnh màn hình NJ81">
+  <meta name="theme-color" content="#0f1115">
+  <meta name="robots" content="index, follow">
+  <link rel="canonical" href="https://nj81-config.onrender.com/">
+  <link rel="icon" href="favicon.svg" type="image/svg+xml">
+  <!-- how a shared link looks (Facebook, Zalo, Discord, X…) -->
+  <meta property="og:type" content="website">
+  <meta property="og:site_name" content="NJ81 Config">
+  <meta property="og:title" content="NJ81 Config · Keydous NJ81 web configurator">
+  <meta property="og:description" content="Lighting, key remaps, macros, screen pictures and GIFs for the Keydous NJ81, in the browser. No driver to install.">
+  <meta property="og:url" content="https://nj81-config.onrender.com/">
+  <meta property="og:image" content="https://nj81-config.onrender.com/og.png">
+  <meta property="og:image:width" content="1200">
+  <meta property="og:image:height" content="630">
+  <meta property="og:image:alt" content="NJ81 Config: a Keydous NJ81 keyboard drawn in pixel art">
+  <meta property="og:locale" content="vi_VN">
+  <meta property="og:locale:alternate" content="en_US">
+  <meta name="twitter:card" content="summary_large_image">
+  <meta name="twitter:title" content="NJ81 Config · Keydous NJ81 web configurator">
+  <meta name="twitter:description" content="Lighting, key remaps, macros, screen pictures and GIFs for the Keydous NJ81, in the browser.">
+  <meta name="twitter:image" content="https://nj81-config.onrender.com/og.png">
+  <!-- what search engines read about the app (not run: a data block) -->
+  <script type="application/ld+json">
+  {
+    "@context": "https://schema.org",
+    "@type": "WebApplication",
+    "name": "NJ81 Config",
+    "url": "https://nj81-config.onrender.com/",
+    "description": "Unofficial web configurator for the Keydous NJ81 keyboard (tested on the NJ81-ED): RGB lighting, key remaps, macros, the Fn layer, 160×80 screen pictures and GIFs, and a library of pictures and settings shared by Keydous users. Runs in Chrome or Edge over WebHID, no driver to install.",
+    "applicationCategory": "UtilitiesApplication",
+    "operatingSystem": "Windows, macOS, Linux, ChromeOS (Chrome or Edge)",
+    "browserRequirements": "Requires WebHID (Chrome or Edge 89+)",
+    "inLanguage": ["vi", "en"],
+    "isAccessibleForFree": true,
+    "offers": { "@type": "Offer", "price": "0", "priceCurrency": "USD" },
+    "image": "https://nj81-config.onrender.com/og.png",
+    "featureList": ["RGB lighting effects", "Key remaps and the Fn layer", "Macros", "Screen pictures and GIFs (160×80)", "Shared pictures and settings library"]
+  }
+  </script>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&amp;family=Space+Grotesk:wght@500;700&amp;display=swap">
@@ -71,8 +110,8 @@
 
     <div class="main-head">
       <div>
-        <h1 id="page-title" data-i18n="lighting"></h1>
-        <p id="page-sub" class="sub" data-i18n="subLight"></p>
+        <h1 id="page-title" data-i18n="connection">Connection</h1>
+        <p id="page-sub" class="sub" data-i18n="connectionHelp">Plug in the USB-C cable and pick the NJ81 in the browser's chooser.</p>
       </div>
       <div id="confirm-pill" class="pill" hidden>
         <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 6 9 17l-5-5"></path></svg>
@@ -81,8 +120,18 @@
     </div>
 
     <section id="start-hint" class="panel start-hint">
-      <h2 data-i18n="startTitle"></h2>
-      <p data-i18n="startText"></p>
+      <h2 data-i18n="startTitle">Connect the keyboard to start</h2>
+      <p data-i18n="startText">Plug the NJ81 in with the USB-C cable and press “Connect keyboard”.</p>
+      <div class="start-about">
+        <h2 data-i18n="aboutTitle">What NJ81 Config does</h2>
+        <p data-i18n="aboutText">A free, unofficial configurator for the Keydous NJ81 keyboard (tested on the NJ81-ED) that runs in Chrome or Edge, with no driver to install.</p>
+        <ul>
+          <li data-i18n="aboutLight">RGB lighting: every built-in effect, colour or rainbow, brightness, speed and direction.</li>
+          <li data-i18n="aboutKeys">Key remaps, media and mouse keys, the Fn layer and macros.</li>
+          <li data-i18n="aboutScreen">The 160×80 screen: your own pictures and GIFs, sharp, moved into place, sent with a progress bar.</li>
+          <li data-i18n="aboutLibrary">A library of pictures, GIFs and NJ81-ED settings shared by Keydous users, applied in one click.</li>
+        </ul>
+      </div>
     </section>
 
     <!-- The keyboard drawing, on the Lighting and Screen tabs -->
