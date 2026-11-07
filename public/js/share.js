@@ -75,6 +75,12 @@ const keyForHid = (hid) => (hid === FN_CODE ? KEYS.find((k) => k.label === "Fn")
 const hex = (rgb) => [(rgb >> 16) & 255, (rgb >> 8) & 255, rgb & 255];
 const previews = new Set();
 let previewLoop = 0;
+let lastPreview = 0;
+const PREVIEW_MS = 1000 / 30;   // 30 frames a second is plenty for a 220 px picture
+/* Only pictures on screen are drawn: one observer for all of them. */
+const onScreen = typeof IntersectionObserver === "function"
+  ? new IntersectionObserver((entries) => { for (const e of entries) { e.target.dataset.seen = e.isIntersecting ? "1" : ""; } if (entries.some((e) => e.isIntersecting) && !previewLoop) { previewLoop = requestAnimationFrame(runPreviews); } })
+  : null;
 const drawPreview = (p, time) => {
   const { canvas, settings, pic, presses } = p;
   const ctx = canvas.getContext("2d");
@@ -107,19 +113,27 @@ const drawPreview = (p, time) => {
     }
   }
 };
-const runPreviews = (time) => {
+function runPreviews(time) {
   previewLoop = 0;
+  let animating = false;
+  const due = time - lastPreview >= PREVIEW_MS;
+  if (due) { lastPreview = time; }
   for (const p of [...previews]) {
-    if (!p.canvas.isConnected) { previews.delete(p); continue; }
-    if (p.canvas.offsetParent !== null && (p.static !== true || !p.drawn)) { drawPreview(p, time); p.drawn = true; }
+    if (!p.canvas.isConnected) { previews.delete(p); onScreen?.unobserve(p.canvas); continue; }
+    const visible = onScreen ? p.canvas.dataset.seen === "1" : p.canvas.offsetParent !== null;
+    if (!visible) { continue; }
+    if (!p.static) { animating = true; }
+    if ((due && !p.static) || !p.drawn) { drawPreview(p, time); p.drawn = true; }
   }
-  if (previews.size) { previewLoop = requestAnimationFrame(runPreviews); }
-};
+  // stops when nothing on screen moves; the observer starts it again when a picture comes into view
+  if (animating || [...previews].some((p) => !p.drawn && p.canvas.dataset.seen === "1")) { previewLoop = requestAnimationFrame(runPreviews); }
+}
 export const keyboardPreview = (light, lightPic) => {
   const canvas = document.createElement("canvas");
   canvas.className = "share-kbd";
-  canvas.width = 480;
-  canvas.height = Math.round((480 * LAYOUT_HEIGHT) / LAYOUT_WIDTH);
+  const width = Math.round(220 * Math.min(2, window.devicePixelRatio || 1));   // the size it is shown at, sharp on HiDPI
+  canvas.width = width;
+  canvas.height = Math.round((width * LAYOUT_HEIGHT) / LAYOUT_WIDTH);
   let pic = null;
   if (light?.type === "LightUserPicture" && Array.isArray(lightPic)) {
     pic = new Map();
@@ -128,12 +142,13 @@ export const keyboardPreview = (light, lightPic) => {
   const s = pic ? null : lightFromShared(light);
   const settings = s && !s.off ? { mode: s.mode, option: s.option, rainbow: s.rainbow, off: false, color: hex(parseInt(s.color.slice(1), 16)), level: Math.max(0.35, s.brightness / 4), speed: s.speed / 4 } : null;
   previews.add({ canvas, settings, pic, presses: [], static: !settings });
+  onScreen?.observe(canvas);
   if (!previewLoop) { previewLoop = requestAnimationFrame(runPreviews); }
   return canvas;
 };
 
-const post = async (url, body) => {
-  const response = await fetch(url, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
+const post = async (url, body, signal) => {
+  const response = await fetch(url, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body), signal });
   if (!response.ok) { throw new Error(`HTTP ${response.status}`); }
   return response.json();
 };
@@ -149,41 +164,119 @@ export const initShare = (ctx) => {
   const state = {
     view: saved.view === "configs" ? "configs" : "images", imgOrder: saved.imgOrder === "top" ? "top" : "new", imgPage: Math.max(1, saved.imgPage | 0 || 1), imgPages: 1,
     cfgOrder: saved.cfgOrder === "count" ? "count" : "time", cfgPage: Math.max(1, saved.cfgPage | 0 || 1), configs: null, scanning: false, urls: [],
+    shown: "",   // the pictures page on show ("order:page")
+    onShow: new Set(),   // the md5 of the pictures on show (their files are kept)
   };
+  const aborted = (error) => error?.name === "AbortError";
   const remember = () => { try { localStorage.setItem(VIEW_KEY, JSON.stringify({ view: state.view, imgOrder: state.imgOrder, imgPage: state.imgPage, cfgOrder: state.cfgOrder, cfgPage: state.cfgPage })); } catch (error) { /* private mode */ } };
   $("share-img-order").value = state.imgOrder;
   $("share-cfg-order").value = state.cfgOrder;
 
   /* ---------- pictures / GIFs ---------- */
-  const fileOf = async (md5) => {
-    const response = await fetch(IMAGE_FILE + md5);
+  /* Files by md5 (the same picture is not fetched twice, e.g. in both orders), as blob URLs, decoded ahead so a page shows
+     in one go. At most FILES kept; the oldest go first, never one of the page on show. */
+  const FILES = 120;
+  const files = new Map();   // md5 -> { url, type }
+  const typeOf = (image) => (image.screen_type === "GIF" ? "image/gif" : "image/png");
+  const fileOf = async (image, signal) => {
+    const kept = files.get(image.md5);
+    if (kept) { files.delete(image.md5); files.set(image.md5, kept); return kept; }   // most recent last
+    const response = await fetch(IMAGE_FILE + image.md5, { signal });
     if (!response.ok) { throw new Error(`HTTP ${response.status}`); }
-    return inflate(await response.arrayBuffer());
+    const blob = await inflate(await response.arrayBuffer());
+    const type = typeOf(image);
+    const url = URL.createObjectURL(blob.type === type ? blob : new Blob([blob], { type }));
+    const pic = new Image();
+    pic.src = url;
+    await pic.decode().catch(() => {});   // decoded now, not when the page is shown
+    const file = { url, type };
+    files.set(image.md5, file);
+    for (const [md5, old] of files) {
+      if (files.size <= FILES) { break; }
+      if (state.onShow.has(md5)) { continue; }
+      URL.revokeObjectURL(old.url);
+      files.delete(md5);
+    }
+    return file;
+  };
+  /* Pages of pictures, list and files together, by "order:page". The page on show is read first; then the next AHEAD
+     pages are read one after the other in the background, so "next" shows at once. Anything else the user does (another
+     tab, the other list, another order, an Apply button) cancels the reads still on their way. */
+  const AHEAD = 3;
+  const pages = new Map();   // key -> { promise, controller, done }
+  const keyOf = (order, page) => `${order}:${page}`;
+  const fetchPage = async (order, page, signal) => {
+    const answer = await post(`${IMAGE_API}/list`, { page, per_page: PER_PAGE, company: COMPANY, order_by_date: order === "new" }, signal);
+    if (answer.code !== 0) { throw new Error(answer.err_message || "error"); }
+    const total = Math.max(1, Math.ceil((answer.data.totle_count || 0) / PER_PAGE));
+    // all the files of the page first: the grid then shows in one go instead of pictures popping in one by one
+    const items = await Promise.all(answer.data.data.map(async (item) => ({
+      item, file: await fileOf(item.bit_image, signal).catch((error) => { if (aborted(error)) { throw error; } return null; }),
+    })));
+    return { total, items };
+  };
+  const getPage = (order, page) => {
+    const key = keyOf(order, page);
+    const kept = pages.get(key);
+    if (kept) { return kept.promise; }
+    const entry = { controller: new AbortController(), done: false };
+    entry.promise = fetchPage(order, page, entry.controller.signal).then(
+      (data) => { entry.done = true; return data; },
+      (error) => { if (pages.get(key) === entry) { pages.delete(key); } throw error; },
+    );
+    pages.set(key, entry);
+    return entry.promise;
+  };
+  let readAhead = 0;   // bumped to stop the reading ahead
+  /* Cancels the reads on their way (all of them, or all but `keep`), and drops pages far from the one on show. */
+  const cancelPictures = (keep = null) => {
+    readAhead += 1;
+    for (const [key, entry] of pages) {
+      const [order, page] = key.split(":");
+      const far = order !== state.imgOrder || Math.abs(Number(page) - state.imgPage) > AHEAD;
+      if ((!entry.done && key !== keep) || (far && key !== keep)) { if (!entry.done) { entry.controller.abort(); } pages.delete(key); }
+    }
+  };
+  const idle = (run) => new Promise((resolve) => { (window.requestIdleCallback ?? ((f) => setTimeout(f, 200)))(() => resolve(run === readAhead), { timeout: 1500 }); });
+  const readNext = async () => {
+    const run = ++readAhead;
+    if (navigator.connection?.saveData) { return; }   // the user asked the browser to save data: only what is asked for
+    for (let page = state.imgPage + 1; page <= Math.min(state.imgPages, state.imgPage + AHEAD); page += 1) {   // none on the last page
+      if (!(await idle(run))) { return; }
+      try { await getPage(state.imgOrder, page); } catch (error) { return; }
+    }
   };
   const loadImages = async () => {
     const box = $("share-images");
-    $("share-img-state").textContent = t("shareLoading");
+    const key = keyOf(state.imgOrder, state.imgPage);
+    cancelPictures(key);
+    $("share-img-state").textContent = "";
+    $("share-img-page").textContent = `${state.imgPage} / ${state.imgPages}`;   // the new number at once
+    $("share-img-prev").disabled = state.imgPage <= 1;
+    $("share-img-next").disabled = state.imgPage >= state.imgPages;
+    if (!pages.get(key)?.done) { box.classList.add("busy"); }
     try {
-      const items = await wait(async () => {
-        const answer = await post(`${IMAGE_API}/list`, { page: state.imgPage, per_page: PER_PAGE, company: COMPANY, order_by_date: state.imgOrder === "new" });
-        if (answer.code !== 0) { throw new Error(answer.err_message || "error"); }
-        state.imgPages = Math.max(1, Math.ceil((answer.data.totle_count || 0) / PER_PAGE));
-        if (state.imgPage > state.imgPages) { state.imgPage = state.imgPages; return null; }   // a kept page that no longer exists
-        // all the files of the page first: the grid then shows in one go instead of pictures popping in one by one
-        return Promise.all(answer.data.data.map(async (item) => ({ item, blob: await fileOf(item.bit_image.md5).catch(() => null) })));
-      });
-      if (!items) { return loadImages(); }
-      state.urls.forEach((u) => URL.revokeObjectURL(u));
-      state.urls = [];
-      box.replaceChildren(...items.map(({ item, blob }) => card(item, blob)));
-      $("share-img-state").textContent = "";
-    } catch (error) { $("share-img-state").textContent = `${t("shareFailed")}: ${why(error)}`; }
+      const ready = pages.get(key)?.done;
+      const { total, items } = await (ready ? getPage(state.imgOrder, state.imgPage) : wait(() => getPage(state.imgOrder, state.imgPage)));
+      if (key !== keyOf(state.imgOrder, state.imgPage)) { return; }   // the user moved on meanwhile
+      state.imgPages = total;
+      if (state.imgPage > total) { state.imgPage = total; return loadImages(); }   // a kept page that no longer exists
+      state.onShow = new Set(items.map(({ item }) => item.bit_image.md5));
+      box.replaceChildren(...items.map(({ item, file }) => card(item, file)));
+      state.shown = key;
+      const bar = $("share-images-box").querySelector(".share-bar");
+      if (bar && bar.getBoundingClientRect().top < 0) { bar.scrollIntoView({ block: "start", behavior: "smooth" }); }   // back to the top of the list
+      readNext();
+    } catch (error) {
+      if (aborted(error)) { return; }
+      $("share-img-state").textContent = `${t("shareFailed")}: ${why(error)}`;
+    } finally { box.classList.remove("busy"); }
     $("share-img-page").textContent = `${state.imgPage} / ${state.imgPages}`;
     remember();
     $("share-img-prev").disabled = state.imgPage <= 1;
     $("share-img-next").disabled = state.imgPage >= state.imgPages;
   };
-  const card = (item, blob) => {
+  const card = (item, file) => {
     const image = item.bit_image;
     const el = document.createElement("figure");
     el.className = "share-card";
@@ -196,15 +289,14 @@ export const initShare = (ctx) => {
     const use = Object.assign(document.createElement("button"), { type: "button", className: "small-btn", textContent: t("shareUsePicture") });
     use.disabled = true;
     el.append(shot, meta, use);
-    if (!blob) { shot.textContent = "✕"; return el; }
+    if (!file) { shot.textContent = "✕"; return el; }
     {
-      const type = image.screen_type === "GIF" ? "image/gif" : "image/png";
-      const typed = blob.type === type ? blob : new Blob([blob], { type });
-      const url = URL.createObjectURL(typed);
-      state.urls.push(url);
-      shot.append(Object.assign(document.createElement("img"), { src: url, alt: image.title || "" }));
+      const { url, type } = file;
+      shot.append(Object.assign(document.createElement("img"), { src: url, alt: image.title || "", decoding: "sync" }));
       use.disabled = false;
-      use.addEventListener("click", () => {
+      use.addEventListener("click", async () => {
+        cancelAll();
+        const typed = await (await fetch(url)).blob();
         const name = `${(image.title || "share").replace(/[\\/:*?"<>|]+/g, " ").trim() || "share"}.${type === "image/gif" ? "gif" : "png"}`;
         usePicture(new File([typed], name, { type }));
         logOk("areaShare", `${t("sharePictureTaken")}: ${image.title || name} (${item.user_name || "?"})`);
@@ -215,66 +307,89 @@ export const initShare = (ctx) => {
 
   /* ---------- NJ81-ED settings ---------- */
   const readCache = () => { try { return JSON.parse(localStorage.getItem(CACHE_KEY) || "null"); } catch (error) { return null; } };
-  const keep = (configs, newest) => { try { localStorage.setItem(CACHE_KEY, JSON.stringify({ at: Date.now(), newest, configs })); } catch (error) { /* full or private */ } };
+  const keep = (configs, newest, resume) => { try { localStorage.setItem(CACHE_KEY, JSON.stringify({ at: Date.now(), newest, configs, resume })); } catch (error) { /* full or private */ } };
   /* One page of the list. The server answers "busy" when asked too fast: such a page is asked again, up to 4 times, a
      little later each time. */
-  const pause = (ms) => new Promise((resolve) => { setTimeout(resolve, ms); });
-  const listPage = async (page, rankType = "time") => {
+  const pause = (ms, signal) => new Promise((resolve, reject) => {
+    const timer = setTimeout(resolve, ms);
+    signal?.addEventListener("abort", () => { clearTimeout(timer); reject(new DOMException("Aborted", "AbortError")); }, { once: true });
+  });
+  const listPage = async (page, signal, rankType = "time") => {
     let last = null;
     for (let attempt = 0; attempt < 4; attempt += 1) {
-      if (attempt) { await pause(1500 * attempt); }
+      if (attempt) { await pause(1500 * attempt, signal); }
       try {
-        const answer = await post(CONFIG_API, { rankType, page, company: COMPANY, deviceType: "keyboard", deviceGroup: GROUP });
+        const answer = await post(CONFIG_API, { rankType, page, company: COMPANY, deviceType: "keyboard", deviceGroup: GROUP }, signal);
         if (answer.errCode === 0) { return answer.data; }
         last = new Error(answer.errMsg || "error");
-      } catch (error) { last = error; }
+      } catch (error) { if (aborted(error)) { throw error; } last = error; }
     }
     throw last;
   };
+  let scanControl = null;
+  const cancelScan = () => { scanControl?.abort(); };
   const slim = (c) => ({ id: c.id, describe: c.describe, createAt: c.createAt, updatedAt: c.updatedAt, downloadTimes: c.downloadTimes,
     name: c.config.name, user: c.config.user?.name ?? c.config.user?.nickname ?? "", light: c.config.light, value: c.config.value || [],
     lightPic: c.config.light?.type === "LightUserPicture" ? (c.config.lightPic || []).map((k) => ({ hid: k.hid, rgb: k.rgb })) : undefined });
-  /* Reads the list newest first. With configs kept from before, stops at the first page that reaches them. */
+  /* Reads the list newest first, down to the newest setting seen by the last complete read. Cancelled (another tab, the
+     pictures list, an Apply button), it keeps what it found and where it was, and reads on from there next time. */
   const scan = async () => {
     if (state.scanning) { return; }
     state.scanning = true;
+    scanControl = new AbortController();
+    const { signal } = scanControl;
     $("share-cfg-refresh").disabled = true;
     const cache = readCache();
     const kept = cache?.configs ?? [];
-    const newest = cache?.newest ?? -1;   // the newest setting (any model) seen last time: the list is read down to it
+    const newest = cache?.newest ?? -1;   // the newest setting (any model) of the last complete read
+    const resume = cache?.resume ?? null;   // a read cancelled half way: { page, found, top }
     const known = new Set(kept.map((c) => c.id));
-    const found = [];
+    const found = [...(resume?.found ?? [])];
+    let top = resume?.top ?? -1;
+    let page = resume?.page ?? 2;
+    const merged = () => [...found, ...kept.filter((c) => !found.some((f) => f.id === c.id))].sort((a, b) => b.id - a.id);
     try {
-      const first = await wait(() => listPage(1));
-      const pages = Math.max(1, Math.ceil(first.configsCount / 10));
+      const first = await wait(() => listPage(1, signal));
+      const count = Math.max(1, Math.ceil(first.configsCount / 10));
+      top = Math.max(top, ...first.configs.map((c) => c.id));
       let stop = false;
       let missed = 0;   // pages that never answered: then the list is read again from the top next time
-      const take = (data) => {
+      const take = (data, mayStop = true) => {
         for (const c of data.configs) {
-          if (known.has(c.id) || c.id <= newest) { stop = true; }
+          if (found.some((f) => f.id === c.id)) { continue; }
+          if (known.has(c.id) || c.id <= newest) { if (mayStop) { stop = true; } }
           else if (c.config?.deviceType?.name === MODEL) { found.push(slim(c)); }
         }
       };
-      const merged = () => [...found, ...kept.filter((c) => !found.some((f) => f.id === c.id))].sort((a, b) => b.id - a.id);
-      take(first);
+      take(first, !resume);   // read on from a cancelled read: page 1 only brings what is new since
+      if (found.length) { state.configs = merged(); renderConfigs(); }
       const AT_ONCE = 3;   // pages asked at the same time: more makes the server answer "busy"
-      for (let page = 2; page <= pages && !stop; page += AT_ONCE) {   // what is found shows at once
-        const read = () => Promise.all(Array.from({ length: Math.min(AT_ONCE, pages - page + 1) }, (_, i) => listPage(page + i).catch(() => { missed += 1; return { configs: [] }; })));
+      for (; page <= count && !stop; page += AT_ONCE) {   // what is found shows at once
+        const at = page;
+        const read = () => Promise.all(Array.from({ length: Math.min(AT_ONCE, count - at + 1) }, (_, i) => listPage(at + i, signal)
+          .catch((error) => { if (aborted(error)) { throw error; } missed += 1; return { configs: [] }; })));
         const batch = await (state.configs?.length ? read() : wait(read));   // the loading stays until something can be shown
         const before = found.length;
-        batch.forEach(take);
-        $("share-cfg-state").textContent = `${t("shareScanning")} ${Math.min(pages, page + AT_ONCE - 1)}/${pages} · ${t("shareFound")} ${kept.length + found.length}`;
+        batch.forEach((data) => take(data));
+        $("share-cfg-state").textContent = `${t("shareScanning")} ${Math.min(count, at + AT_ONCE - 1)}/${count} · ${t("shareFound")} ${kept.length + found.length}`;
         if (found.length !== before) { state.configs = merged(); renderConfigs(); }
       }
       const all = merged();
-      keep(all, missed ? cache?.newest ?? -1 : Math.max(...first.configs.map((c) => c.id), cache?.newest ?? 0));
+      keep(all, missed ? newest : top);
       state.configs = all;
       $("share-cfg-state").textContent = `${all.length} ${t("shareConfigsOf")} NJ81-ED · ${t("shareOutOf")} ${first.configsCount}`;
     } catch (error) {
-      state.configs = state.configs?.length ? state.configs : kept;
-      $("share-cfg-state").textContent = `${t("shareFailed")}: ${why(error)}`;
+      if (aborted(error)) {
+        keep(kept, newest, { page, found, top });   // read on from here next time
+        state.configs = merged();
+        $("share-cfg-state").textContent = `${t("sharePaused")} · ${t("shareFound")} ${state.configs.length}`;
+      } else {
+        state.configs = state.configs?.length ? state.configs : kept;
+        $("share-cfg-state").textContent = `${t("shareFailed")}: ${why(error)}`;
+      }
     }
     state.scanning = false;
+    scanControl = null;
     $("share-cfg-refresh").disabled = false;
     renderConfigs();
   };
@@ -310,8 +425,8 @@ export const initShare = (ctx) => {
     body.append(...lines.map((text) => Object.assign(document.createElement("p"), { className: "hint", textContent: text })));
     const actions = Object.assign(document.createElement("div"), { className: "row" });
     const button = (label, on, run) => { const b = Object.assign(document.createElement("button"), { type: "button", className: "small-btn", textContent: t(label) }); b.disabled = !on; b.addEventListener("click", run); return b; };
-    const doLight = () => applyLight(light, c.name);
-    const doKeys = () => applyKeys(keysOk, c.name, fnLayer);
+    const doLight = () => { cancelAll(); return applyLight(light, c.name); };
+    const doKeys = () => { cancelAll(); return applyKeys(keysOk, c.name, fnLayer); };
     actions.append(
       button("shareApplyLight", Boolean(light), doLight),
       button("shareApplyKeys", keysOk.length > 0, doKeys),
@@ -322,29 +437,51 @@ export const initShare = (ctx) => {
   };
 
   /* ---------- wiring ---------- */
+  const cancelAll = () => { cancelPictures(); cancelScan(); };
   const show = (view) => {
+    if (view === "images") { cancelScan(); } else { cancelPictures(); }   // the other list's reads stop
     state.view = view;
     remember();
     for (const b of document.querySelectorAll("[data-share-view]")) { b.setAttribute("aria-pressed", String(b.dataset.shareView === view)); }
     $("share-images-box").hidden = view !== "images";
     $("share-configs-box").hidden = view !== "configs";
-    if (view === "images" && !$("share-images").childElementCount) { loadImages(); }
-    if (view === "configs" && !state.configs) { state.configs = readCache()?.configs ?? null; renderConfigs(); scan(); }
+    if (view === "images") { if (state.shown !== keyOf(state.imgOrder, state.imgPage)) { loadImages(); } else { readNext(); } }
+    if (view === "configs") {
+      if (!state.configs) { state.configs = readCache()?.configs ?? null; renderConfigs(); }
+      if (!state.scanning && (readCache()?.resume || !readCache())) { scan(); }   // a read that was cancelled goes on
+    }
   };
   for (const b of document.querySelectorAll("[data-share-view]")) { b.addEventListener("click", () => show(b.dataset.shareView)); }
   $("share-img-order").addEventListener("change", () => { state.imgOrder = $("share-img-order").value; state.imgPage = 1; loadImages(); });
-  $("share-img-prev").addEventListener("click", () => { state.imgPage -= 1; loadImages(); });
-  $("share-img-next").addEventListener("click", () => { state.imgPage += 1; loadImages(); });
+  const turn = (step) => {
+    const page = Math.max(1, Math.min(state.imgPages, state.imgPage + step));
+    if (page === state.imgPage) { return; }   // first / last page: nothing to ask the server
+    state.imgPage = page;
+    loadImages();
+  };
+  $("share-img-prev").addEventListener("click", () => turn(-1));
+  $("share-img-next").addEventListener("click", () => turn(1));
+  window.addEventListener("keydown", (event) => {
+    if ($("tab-share").hidden || state.view !== "images" || event.altKey || event.ctrlKey || event.metaKey) { return; }
+    if (event.target.closest?.("input, select, textarea")) { return; }
+    if (event.key === "ArrowLeft") { event.preventDefault(); turn(-1); }
+    if (event.key === "ArrowRight") { event.preventDefault(); turn(1); }
+  });
   $("share-cfg-order").addEventListener("change", () => { state.cfgOrder = $("share-cfg-order").value; state.cfgPage = 1; renderConfigs(); });
-  $("share-cfg-prev").addEventListener("click", () => { state.cfgPage -= 1; renderConfigs(); });
+  $("share-cfg-prev").addEventListener("click", () => { if (state.cfgPage > 1) { state.cfgPage -= 1; renderConfigs(); } });
   $("share-cfg-next").addEventListener("click", () => { state.cfgPage += 1; renderConfigs(); });
-  $("share-cfg-refresh").addEventListener("click", scan);
+  $("share-cfg-refresh").addEventListener("click", () => scan());
 
   /* At start (the full-screen loading waits for it): the first page of pictures, and the NJ81-ED settings (kept ones at
      once, then the list read down to them; the first time the whole list). progress(text) tells how far it is. */
   /* At start the full-screen loading waits only for the page on show: the pictures of that page, or the NJ81-ED
      settings kept from before (the first time: until the first one is found; the rest of the list is read behind). */
+  let preloading = false;
   const preload = async (progress = () => {}) => {
+    preloading = true;
+    try { await preloadPage(progress); } finally { preloading = false; }
+  };
+  const preloadPage = async (progress) => {
     progress(t("shareLoading"));
     for (const b of document.querySelectorAll("[data-share-view]")) { b.setAttribute("aria-pressed", String(b.dataset.shareView === state.view)); }
     $("share-images-box").hidden = state.view !== "images";
@@ -363,6 +500,7 @@ export const initShare = (ctx) => {
   return {
     preload,
     onShow: () => show(state.view),
+    onHide: () => { if (!preloading) { cancelAll(); } },   // another tab: the Library stops reading (not while the page starts)
     rerender: () => { if (state.configs) { renderConfigs(); } },
   };
 };
