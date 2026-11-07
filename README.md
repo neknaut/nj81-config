@@ -72,7 +72,7 @@ itself under `/keydous/*` — only the Library's three calls (picture list, pict
 most 4 at a time to Keydous and 120 a minute per visitor. It is not an open proxy.
 
 **Render:** **New → Blueprint**, pick this repo. [`render.yaml`](render.yaml) creates a Node web service (`node server.mjs`, no
-build, `HOST=0.0.0.0`) on Render's HTTPS. The free plan sleeps when unused: the first visit after a while takes ~30 s.
+build) on Render's HTTPS. On Render the server listens on `0.0.0.0` by itself (Render sets `RENDER`), so no `HOST` is needed. The free plan sleeps when unused: the first visit after a while takes ~30 s.
 **Keep-alive** (as the slack-bot): a free web service sleeps after 15 minutes without a visit, and the next visitor waits
 ~50 s. Every 10 minutes the server visits its own `/keydous/ping` at the address Render gives it (`RENDER_EXTERNAL_URL`), so it
 stays awake. Locally nothing happens. `KEEPALIVE=0` turns it off, `KEEPALIVE_MINUTES` changes the interval, `KEEPALIVE_URL`
@@ -83,7 +83,7 @@ A service that is already asleep cannot wake itself: an external cron hitting th
 If you made the old static site from an earlier `render.yaml`, delete it and create the Blueprint again (a static site cannot
 run `server.mjs`).
 
-**Any other host:** run `node server.mjs` with `HOST=0.0.0.0` and `PORT` set by the host, behind HTTPS (Node 20+, nothing to
+**Any other host:** run `node server.mjs` with `HOST=0.0.0.0` (locally it listens on `localhost` only) and `PORT` set by the host, behind HTTPS (Node 20+, nothing to
 install). The server sets the security headers itself: strict Content-Security-Policy (the page talks only to its own server)
 and `Permissions-Policy: hid=(self)`.
 

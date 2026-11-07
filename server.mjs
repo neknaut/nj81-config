@@ -11,7 +11,9 @@ import { fileURLToPath } from "node:url";
 
 const ROOT = resolve(fileURLToPath(new URL("./public/", import.meta.url)));
 const PORT = Number(process.env.PORT) || 8080;
-const HOST = process.env.HOST || "localhost";   // "0.0.0.0" on a host (Render sets HOST in render.yaml)
+/* Where the server listens: HOST if set; on Render (it sets RENDER) every interface, as its router reaches the service from
+   outside; otherwise only this computer (localhost: nothing else on the network can open it). */
+const HOST = process.env.HOST || (process.env.RENDER ? "0.0.0.0" : "localhost");
 const TYPES = {
   ".html": "text/html; charset=utf-8", ".js": "text/javascript; charset=utf-8", ".mjs": "text/javascript; charset=utf-8",
   ".css": "text/css; charset=utf-8", ".json": "application/json; charset=utf-8", ".svg": "image/svg+xml", ".png": "image/png",
