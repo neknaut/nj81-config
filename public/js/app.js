@@ -165,9 +165,6 @@ const refreshOptionControl = () => {
   $("mode-tools").hidden = !nj;
   $("show-modes").hidden = !nj || !board().done;
   const mode = Number($("effect").value);
-  $("reactive-box").hidden = !nj || off || !info;
-  if (nj && info) { $("reactive").checked = reactiveModes().has(mode); }
-  $("reactive-hint").hidden = $("reactive-box").hidden || !$("reactive").checked;
   const options = info?.options ?? [];
   const keep = $("light-option").value;
   $("light-option").replaceChildren(...options.map((name, i) => new Option(optionLabel(mode, i) ?? name, String(i))));
@@ -657,7 +654,7 @@ const TAB_TITLE = { light: "lighting", keys: "keysTab", macro: "macroTab", scree
 const showTab = (tab) => {
   currentTab = tab;
   try { localStorage.setItem(TAB_KEY, tab); } catch (error) { /* private mode */ }
-  queueMicrotask(() => { keys?.onTab(tab, ready); if (tab === "share") { share?.onShow(); } });
+  queueMicrotask(() => { keys?.onTab(tab, ready); if (tab === "share") { share?.onShow(); } else { share?.onHide(); } });
   $("keyboard-panel").hidden = !ready || !["light", "keys", "screen"].includes(tab);
   for (const button of document.querySelectorAll("[data-tab]")) {
     if (button.dataset.tab === tab) { button.setAttribute("aria-current", "page"); } else { button.removeAttribute("aria-current"); }
@@ -740,16 +737,8 @@ const modeChoices = () => {
   const current = profile.lighting.nj81?.mode;
   return current && !list.includes(current) ? [...list, current] : list;
 };
-/* Effects that light only when a key is pressed. The page cannot see the LEDs, so this is a default per effect that the
-   user corrects per keyboard model with the checkbox under the menu. */
-const reactiveModes = () => { const list = board().reactive; return Array.isArray(list) ? new Set(list) : REACTIVE_DEFAULT; };
-const setReactive = (mode, on) => {
-  const known = board();
-  const set = reactiveModes();
-  if (on) { set.add(mode); } else { set.delete(mode); }
-  known.reactive = [...set];
-  saveBoard(known);
-};
+/* Effects that light only when a key is pressed (ripple, key shadow, radiant: checked on an NJ81-ED). */
+const reactiveModes = () => REACTIVE_DEFAULT;
 let learning = false;
 const noteSeen = (light) => {
   const known = board();
@@ -1187,13 +1176,6 @@ const init = () => {
   });
   restoreChosen();   // the picture this browser chose last time
   $("learn-start").addEventListener("click", () => setLearning(true));
-  $("reactive").addEventListener("change", (event) => {
-    const mode = Number($("effect").value);
-    setReactive(mode, event.target.checked);
-    refreshOptionControl();
-    log(`${modeLabel(mode)}: ${t(event.target.checked ? "reactiveOn" : "reactiveOff")}`, "info", "areaLight");
-    event.target.blur();
-  });
   $("learn-done").addEventListener("click", () => setLearning(false));
   for (const swatch of PRESET_COLOURS) {
     const button = Object.assign(document.createElement("button"), { type: "button", className: "swatch", title: swatch });
@@ -1207,7 +1189,6 @@ const init = () => {
   }
   for (const tab of document.querySelectorAll("[data-tab]")) { tab.addEventListener("click", () => showTab(tab.dataset.tab)); }
   $("mini-clock").addEventListener("click", () => { if (nj) { syncClock(); } });
-  $("reactive").addEventListener("change", () => renderEffectList());
   $("show-modes").addEventListener("click", () => { const known = board(); known.done = false; saveBoard(known); const keep = $("effect").value; fillEffectOptions(); $("effect").value = keep; refreshOptionControl(); });  $("screen-file").addEventListener("change", onScreenFile);
   $("save-local").addEventListener("click", saveLocal);
   $("load-local").addEventListener("click", loadLocal);
