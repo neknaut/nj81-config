@@ -9,6 +9,20 @@
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&amp;family=Space+Grotesk:wght@500;700&amp;display=swap">
   <link rel="stylesheet" href="css/style.css">
+  <!-- every module at once: without these the browser finds them one import after another -->
+  <link rel="modulepreload" href="js/app.js">
+  <link rel="modulepreload" href="js/util.js">
+  <link rel="modulepreload" href="js/profile.js">
+  <link rel="modulepreload" href="js/layout.js">
+  <link rel="modulepreload" href="js/hid.js">
+  <link rel="modulepreload" href="js/royuan.js">
+  <link rel="modulepreload" href="js/gallery.js">
+  <link rel="modulepreload" href="js/keymap.js">
+  <link rel="modulepreload" href="js/keys-ui.js">
+  <link rel="modulepreload" href="js/lighting-nj81.js">
+  <link rel="modulepreload" href="js/i18n.js">
+  <link rel="modulepreload" href="js/guide.js">
+  <link rel="modulepreload" href="js/share.js">
 </head>
 <body>
 <div id="app-loading" class="app-loading" role="status" aria-live="polite"><div class="spinner"></div><span>NJ81 Config</span></div>
@@ -298,7 +312,7 @@
           <div class="share-bar">
             <select id="share-img-order" aria-label="Order"><option value="new" data-i18n="shareNewest"></option><option value="top" data-i18n="sharePopular"></option></select>
             <span id="share-img-state" class="hint"></span>
-            <span class="share-pager"><button id="share-img-prev" type="button" class="small-btn">‹</button><span id="share-img-page"></span><button id="share-img-next" type="button" class="small-btn">›</button></span>
+            <span class="share-pager"><button id="share-img-first" type="button" class="small-btn" aria-label="First page" title="Trang đầu (Home)">«</button><button id="share-img-prev" type="button" class="small-btn" aria-label="Previous page" title="←">‹</button><span id="share-img-page"></span><button id="share-img-next" type="button" class="small-btn" aria-label="Next page" title="→">›</button><button id="share-img-last" type="button" class="small-btn" aria-label="Last page" title="Trang cuối (End)">»</button></span>
           </div>
           <div id="share-images" class="share-grid"></div>
         </div>
@@ -307,7 +321,7 @@
             <select id="share-cfg-order" aria-label="Order"><option value="time" data-i18n="shareNewest"></option><option value="count" data-i18n="shareMostDownloaded"></option></select>
             <button id="share-cfg-refresh" type="button" class="small-btn" data-i18n="shareRefresh"></button>
             <span id="share-cfg-state" class="hint"></span>
-            <span class="share-pager"><button id="share-cfg-prev" type="button" class="small-btn">‹</button><span id="share-cfg-page"></span><button id="share-cfg-next" type="button" class="small-btn">›</button></span>
+            <span class="share-pager"><button id="share-cfg-first" type="button" class="small-btn" aria-label="First page" title="Trang đầu">«</button><button id="share-cfg-prev" type="button" class="small-btn" aria-label="Previous page">‹</button><span id="share-cfg-page"></span><button id="share-cfg-next" type="button" class="small-btn" aria-label="Next page">›</button><button id="share-cfg-last" type="button" class="small-btn" aria-label="Last page" title="Trang cuối">»</button></span>
           </div>
           <div id="share-configs" class="share-configs"></div>
         </div>

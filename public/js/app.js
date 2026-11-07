@@ -255,23 +255,33 @@ const nj81Preview = () => {
   return { mode: l.nj81.mode, option: l.nj81.option, rainbow: l.nj81.rainbow, off: l.nj81.off, color: hexToRgb(l.color), level: l.brightness / 100, speed: l.speed / 100 };
 };
 
+/* Each key's colour is written only when it changes: a style change makes the browser redraw that key's glow. */
+const ledOf = new Map();   // key id -> the --led value written last
+const setLed = (key, value) => {
+  if (ledOf.get(key.id) === value) { return; }
+  ledOf.set(key.id, value);
+  keyEls.get(key.id).style.setProperty("--led", value);   // the CSS of the chosen keycap colour decides how it shows
+};
 const paintKeyboard = (time) => {
   if (currentTab === "keys") {   // the Keys tab: lights off; keys-ui.js tints the keys that have a setting, as the driver
-    for (const key of KEYS) { keyEls.get(key.id).style.setProperty("--led", "#000000"); }
+    for (const key of KEYS) { setLed(key, "#000000"); }
     return;
   }
   const nj81 = nj81Preview();
   const reactive = nj81 ? reactiveModes() : null;
   for (const key of KEYS) {
     const [red, green, blue] = nj81 ? nj81KeyColor(nj81, key, time, presses, reactive) : [0, 0, 0];
-    const el = keyEls.get(key.id);
-    el.style.setProperty("--led", rgbToHex(red, green, blue));   // the CSS of the chosen keycap colour decides how it shows
+    setLed(key, rgbToHex(red, green, blue));
   }
 };
 
+/* The drawing is painted 20 times a second (10 with "reduce motion"), and not at all while it cannot be seen: another tab
+   of the page (Macro, Profile, Library…) or the browser tab in the background. */
+const slowMotion = window.matchMedia?.("(prefers-reduced-motion: reduce)");
 let lastFrame = 0;
 const frame = (time) => {
-  if (time - lastFrame >= FRAME_MS) { lastFrame = time; paintKeyboard(time); }
+  const gap = slowMotion?.matches ? FRAME_MS * 2 : FRAME_MS;
+  if (time - lastFrame >= gap && !document.hidden && !$("keyboard-panel").hidden) { lastFrame = time; paintKeyboard(time); }
   requestAnimationFrame(frame);
 };
 
@@ -648,12 +658,22 @@ const download = (name, data, type) => {
    show the "connect to start" card; the log is always there. */
 let ready = false;
 const TAB_KEY = "nj81-config.tab";
-let currentTab = (() => { try { const saved = localStorage.getItem(TAB_KEY); return ["light", "keys", "macro", "screen", "profile", "share", "log", "guide"].includes(saved) ? saved : "light"; } catch (error) { return "light"; } })();
+/* The tab is kept for F5 only (sessionStorage): closing the page and opening it again starts on Lighting. */
+try { localStorage.removeItem(TAB_KEY); } catch (error) { /* private mode */ }   // kept there by older versions
+let currentTab = (() => { try { const saved = sessionStorage.getItem(TAB_KEY); return ["light", "keys", "macro", "screen", "profile", "share", "log", "guide"].includes(saved) ? saved : "light"; } catch (error) { return "light"; } })();
 const TAB_SUB = { light: "subLight", keys: "subKeys", macro: "subMacro", screen: "subScreen", profile: "subProfile", share: "subShare", log: "subLog", guide: "subGuide" };
 const TAB_TITLE = { light: "lighting", keys: "keysTab", macro: "macroTab", screen: "screen", profile: "profile", share: "shareTab", log: "log", guide: "guide" };
+/* The Guide is long: it is drawn the first time its tab opens, and again only if the language changed since. */
+let guideLanguage = "";
+const showGuide = () => {
+  if (currentTab !== "guide" || guideLanguage === currentLanguage()) { return; }
+  guideLanguage = currentLanguage();
+  renderGuide($("guide-body"), guideLanguage);
+};
 const showTab = (tab) => {
   currentTab = tab;
-  try { localStorage.setItem(TAB_KEY, tab); } catch (error) { /* private mode */ }
+  try { sessionStorage.setItem(TAB_KEY, tab); } catch (error) { /* private mode */ }
+  showGuide();
   queueMicrotask(() => { keys?.onTab(tab, ready); if (tab === "share") { share?.onShow(); } else { share?.onHide(); } });
   $("keyboard-panel").hidden = !ready || !["light", "keys", "screen"].includes(tab);
   for (const button of document.querySelectorAll("[data-tab]")) {
@@ -866,7 +886,8 @@ const startWatching = () => {
   clearTimeout(watchTimer);
   const tick = async () => {
     if (!nj) { return; }
-    if (!njBusy && !njDirty && !screenBusy && Date.now() - lastLocalChange > 3000) {
+    // nobody sees the page while it is in the background: no reads then (it catches up when shown again)
+    if (!document.hidden && !njBusy && !njDirty && !screenBusy && Date.now() - lastLocalChange > 3000) {
       try {
         const light = await nj.client.readLight();
         if (JSON.stringify(light) !== lastBoardLight && nj) {
@@ -1087,12 +1108,17 @@ const finishBoot = (force = false) => {
   if (force !== true) { keyboardSettled = true; }
   if (force !== true && !(keyboardSettled && libraryReady)) { return; }
   booted = true;
-  requestAnimationFrame(() => requestAnimationFrame(() => {
+  let gone = false;
+  const lift = () => {
+    if (gone) { return; }
+    gone = true;
     const cover = $("app-loading");
     if (!cover) { return; }
     cover.classList.add("done");
     setTimeout(() => cover.remove(), 350);
-  }));
+  };
+  requestAnimationFrame(() => requestAnimationFrame(lift));   // after the page has been painted once
+  setTimeout(lift, 600);   // a browser that paints nothing (tab in the background) must not keep the cover
 };
 
 const init = () => {
@@ -1101,7 +1127,7 @@ const init = () => {
 
   const applyLanguage = (language) => {
     setLanguage(language);
-    renderGuide($("guide-body"), language);
+    showGuide();   // drawn only once the Guide tab is open
     for (const button of document.querySelectorAll("[data-lang]")) { button.setAttribute("aria-pressed", String(button.dataset.lang === language)); }
     fillEffectNames();
     refreshOptionControl();   // directions in the new language

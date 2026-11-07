@@ -322,3 +322,5 @@ input[type="range"] { accent-color: var(--accent); }
 .share-grid { transition: opacity 0.15s; }
 .share-grid.busy { opacity: 0.45; pointer-events: none; }   /* the old page stays, dimmed, until the new one is ready */
 .share-card { content-visibility: auto; contain-intrinsic-size: auto 220px; }
+/* "Reduce motion": no fades or smooth scrolls (the keyboard drawing also slows to 10 frames a second) */
+@media (prefers-reduced-motion: reduce) { html { scroll-behavior: auto; } .app-loading, .share-grid { transition: none; } }

@@ -1,24 +1,16 @@
-# Render Blueprint: a static site, no server and no build.
-# WebHID needs HTTPS, which Render gives every *.onrender.com and custom domain.
+# Render Blueprint: one Node web service, no build, no dependencies.
+# server.mjs serves public/ over Render's HTTPS (WebHID needs it), sets the security headers (strict CSP,
+# Permissions-Policy hid=(self)) and makes the Library's calls to the Keydous servers, which refuse a deployed page's browser.
 services:
   - type: web
     name: nj81-config
-    runtime: static
-    buildCommand: echo "static site, nothing to build"
-    staticPublishPath: public
-    headers:
-      - path: /*
-        name: X-Content-Type-Options
-        value: nosniff
-      - path: /*
-        name: Referrer-Policy
-        value: no-referrer
-      - path: /*
-        name: X-Frame-Options
-        value: DENY
-      - path: /*
-        name: Permissions-Policy
-        value: hid=(self), camera=(), microphone=(), geolocation=()
-      - path: /*
-        name: Content-Security-Policy
-        value: default-src 'self'; img-src 'self' data: blob:; style-src 'self' https://fonts.googleapis.com; font-src https://fonts.gstatic.com; script-src 'self'; connect-src 'self'; base-uri 'none'; form-action 'none'; frame-ancestors 'none'
+    runtime: node
+    plan: free
+    buildCommand: echo "no build"
+    startCommand: node server.mjs
+    healthCheckPath: /keydous/ping
+    envVars:
+      - key: HOST
+        value: 0.0.0.0
+      - key: NODE_VERSION
+        value: "22"

@@ -10,13 +10,27 @@ import { KEYS, LAYOUT_HEIGHT, LAYOUT_WIDTH } from "./layout.js";
 import { REACTIVE_DEFAULT, nj81KeyColor } from "./lighting-nj81.js";
 import { HID_KEYS } from "./keymap.js";
 
-const IMAGE_API = "https://api3.rongyuan.tech:3816/api/v2";
-const IMAGE_FILE = "https://api3.rongyuan.tech:3816/download/bit_image_file/";
-const CONFIG_API = "https://api.rongyuan.tech:3814/v1/shared_config_list";
+/* Where the Library's three calls go. Through the app's own server (server.mjs, /keydous/*) when it is there: that works
+   on any address, deployed or local. Straight to the Keydous servers only at http://localhost:8080 with no such server
+   (public/ served some other way), as they answer only that address. Anywhere else the tab says so and calls nothing. */
+const DIRECT = {
+  images: "https://api3.rongyuan.tech:3816/api/v2/list",
+  file: "https://api3.rongyuan.tech:3816/download/bit_image_file/",
+  configs: "https://api.rongyuan.tech:3814/v1/shared_config_list",
+};
+const PROXY = { images: "/keydous/images", file: "/keydous/file/", configs: "/keydous/configs" };
+let API = null;   // DIRECT, PROXY or null (unreachable), set by findApi()
+const findApi = async () => {
+  try { if ((await fetch("/keydous/ping", { cache: "no-store" })).status === 204) { API = PROXY; return; } } catch (error) { /* no server of ours */ }
+  API = globalThis.location?.origin === ALLOWED_ORIGIN ? DIRECT : null;
+};
 const COMPANY = "Keydous";
 const GROUP = "rongyuan_k_rgb";   // the NJ81-ED's group in the driver
 export const MODEL = "yc500_nj81_ed";
-const CACHE_KEY = "nj81-config.share.configs.v2";   // v2: keeps the per-key colours too
+const CACHE_KEY = "nj81-config.share.configs.v2";
+/* The only address the Keydous servers answer from a browser (their CORS rule: "Origin is not allowed" for any other). */
+export const ALLOWED_ORIGIN = "http://localhost:8080";
+const reachable = () => API !== null;
 const PER_PAGE = 12;
 
 /* The driver's light types and the mode numbers its encoder writes for these keyboards (rongyuan_k_rgb). */
@@ -160,7 +174,9 @@ export const initShare = (ctx) => {
   const wait = async (work) => { waiting += 1; $("share-loading").hidden = false; try { return await work(); } finally { waiting -= 1; $("share-loading").hidden = waiting > 0 ? false : true; } };
   /* Which list and page is on show is kept, so F5 comes back to it (and loads only that page). */
   const VIEW_KEY = "nj81-config.share.view";
-  const saved = (() => { try { return JSON.parse(localStorage.getItem(VIEW_KEY) || "{}"); } catch (error) { return {}; } })();
+  // kept for F5 only (sessionStorage): a page opened again starts on the first page of the pictures
+  try { localStorage.removeItem(VIEW_KEY); } catch (error) { /* private mode */ }   // kept there by older versions
+  const saved = (() => { try { return JSON.parse(sessionStorage.getItem(VIEW_KEY) || "{}"); } catch (error) { return {}; } })();
   const state = {
     view: saved.view === "configs" ? "configs" : "images", imgOrder: saved.imgOrder === "top" ? "top" : "new", imgPage: Math.max(1, saved.imgPage | 0 || 1), imgPages: 1,
     cfgOrder: saved.cfgOrder === "count" ? "count" : "time", cfgPage: Math.max(1, saved.cfgPage | 0 || 1), configs: null, scanning: false, urls: [],
@@ -168,7 +184,7 @@ export const initShare = (ctx) => {
     onShow: new Set(),   // the md5 of the pictures on show (their files are kept)
   };
   const aborted = (error) => error?.name === "AbortError";
-  const remember = () => { try { localStorage.setItem(VIEW_KEY, JSON.stringify({ view: state.view, imgOrder: state.imgOrder, imgPage: state.imgPage, cfgOrder: state.cfgOrder, cfgPage: state.cfgPage })); } catch (error) { /* private mode */ } };
+  const remember = () => { try { sessionStorage.setItem(VIEW_KEY, JSON.stringify({ view: state.view, imgOrder: state.imgOrder, imgPage: state.imgPage, cfgOrder: state.cfgOrder, cfgPage: state.cfgPage })); } catch (error) { /* private mode */ } };
   $("share-img-order").value = state.imgOrder;
   $("share-cfg-order").value = state.cfgOrder;
 
@@ -181,7 +197,7 @@ export const initShare = (ctx) => {
   const fileOf = async (image, signal) => {
     const kept = files.get(image.md5);
     if (kept) { files.delete(image.md5); files.set(image.md5, kept); return kept; }   // most recent last
-    const response = await fetch(IMAGE_FILE + image.md5, { signal });
+    const response = await fetch(API.file + image.md5, { signal });
     if (!response.ok) { throw new Error(`HTTP ${response.status}`); }
     const blob = await inflate(await response.arrayBuffer());
     const type = typeOf(image);
@@ -206,7 +222,7 @@ export const initShare = (ctx) => {
   const pages = new Map();   // key -> { promise, controller, done }
   const keyOf = (order, page) => `${order}:${page}`;
   const fetchPage = async (order, page, signal) => {
-    const answer = await post(`${IMAGE_API}/list`, { page, per_page: PER_PAGE, company: COMPANY, order_by_date: order === "new" }, signal);
+    const answer = await post(API.images, { page, per_page: PER_PAGE, company: COMPANY, order_by_date: order === "new" }, signal);
     if (answer.code !== 0) { throw new Error(answer.err_message || "error"); }
     const total = Math.max(1, Math.ceil((answer.data.totle_count || 0) / PER_PAGE));
     // all the files of the page first: the grid then shows in one go instead of pictures popping in one by one
@@ -247,13 +263,13 @@ export const initShare = (ctx) => {
     }
   };
   const loadImages = async () => {
+    if (!reachable()) { return; }
     const box = $("share-images");
     const key = keyOf(state.imgOrder, state.imgPage);
     cancelPictures(key);
     $("share-img-state").textContent = "";
     $("share-img-page").textContent = `${state.imgPage} / ${state.imgPages}`;   // the new number at once
-    $("share-img-prev").disabled = state.imgPage <= 1;
-    $("share-img-next").disabled = state.imgPage >= state.imgPages;
+    pagerState();
     if (!pages.get(key)?.done) { box.classList.add("busy"); }
     try {
       const ready = pages.get(key)?.done;
@@ -273,9 +289,13 @@ export const initShare = (ctx) => {
     } finally { box.classList.remove("busy"); }
     $("share-img-page").textContent = `${state.imgPage} / ${state.imgPages}`;
     remember();
-    $("share-img-prev").disabled = state.imgPage <= 1;
-    $("share-img-next").disabled = state.imgPage >= state.imgPages;
+    pagerState();
   };
+  /* « ‹ page › »: first and previous off on the first page, next and last off on the last one. */
+  function pagerState() {
+    $("share-img-first").disabled = $("share-img-prev").disabled = state.imgPage <= 1;
+    $("share-img-last").disabled = $("share-img-next").disabled = state.imgPage >= state.imgPages;
+  }
   const card = (item, file) => {
     const image = item.bit_image;
     const el = document.createElement("figure");
@@ -319,7 +339,7 @@ export const initShare = (ctx) => {
     for (let attempt = 0; attempt < 4; attempt += 1) {
       if (attempt) { await pause(1500 * attempt, signal); }
       try {
-        const answer = await post(CONFIG_API, { rankType, page, company: COMPANY, deviceType: "keyboard", deviceGroup: GROUP }, signal);
+        const answer = await post(API.configs, { rankType, page, company: COMPANY, deviceType: "keyboard", deviceGroup: GROUP }, signal);
         if (answer.errCode === 0) { return answer.data; }
         last = new Error(answer.errMsg || "error");
       } catch (error) { if (aborted(error)) { throw error; } last = error; }
@@ -334,7 +354,7 @@ export const initShare = (ctx) => {
   /* Reads the list newest first, down to the newest setting seen by the last complete read. Cancelled (another tab, the
      pictures list, an Apply button), it keeps what it found and where it was, and reads on from there next time. */
   const scan = async () => {
-    if (state.scanning) { return; }
+    if (state.scanning || !reachable()) { return; }
     state.scanning = true;
     scanControl = new AbortController();
     const { signal } = scanControl;
@@ -400,8 +420,8 @@ export const initShare = (ctx) => {
     state.cfgPage = Math.min(state.cfgPage, pages);
     $("share-cfg-page").textContent = `${state.cfgPage} / ${pages}`;
     remember();
-    $("share-cfg-prev").disabled = state.cfgPage <= 1;
-    $("share-cfg-next").disabled = state.cfgPage >= pages;
+    $("share-cfg-first").disabled = $("share-cfg-prev").disabled = state.cfgPage <= 1;
+    $("share-cfg-last").disabled = $("share-cfg-next").disabled = state.cfgPage >= pages;
     const rows = list.slice((state.cfgPage - 1) * 10, state.cfgPage * 10);
     if (!rows.length && state.configs) { $("share-configs").replaceChildren(Object.assign(document.createElement("p"), { className: "hint", textContent: t("shareNoConfigs") })); return; }
     $("share-configs").replaceChildren(...rows.map(configRow));
@@ -439,6 +459,12 @@ export const initShare = (ctx) => {
   /* ---------- wiring ---------- */
   const cancelAll = () => { cancelPictures(); cancelScan(); };
   const show = (view) => {
+    if (!reachable()) {   // only the notice: nothing to read
+      for (const b of document.querySelectorAll("[data-share-view]")) { b.setAttribute("aria-pressed", String(b.dataset.shareView === view)); }
+      $("share-images-box").hidden = view !== "images";
+      $("share-configs-box").hidden = view !== "configs";
+      return;
+    }
     if (view === "images") { cancelScan(); } else { cancelPictures(); }   // the other list's reads stop
     state.view = view;
     remember();
@@ -453,32 +479,48 @@ export const initShare = (ctx) => {
   };
   for (const b of document.querySelectorAll("[data-share-view]")) { b.addEventListener("click", () => show(b.dataset.shareView)); }
   $("share-img-order").addEventListener("change", () => { state.imgOrder = $("share-img-order").value; state.imgPage = 1; loadImages(); });
-  const turn = (step) => {
-    const page = Math.max(1, Math.min(state.imgPages, state.imgPage + step));
+  const turn = (step, to = null) => {
+    const page = Math.max(1, Math.min(state.imgPages, to ?? state.imgPage + step));
     if (page === state.imgPage) { return; }   // first / last page: nothing to ask the server
     state.imgPage = page;
     loadImages();
   };
   $("share-img-prev").addEventListener("click", () => turn(-1));
   $("share-img-next").addEventListener("click", () => turn(1));
+  $("share-img-first").addEventListener("click", () => turn(0, 1));
+  $("share-img-last").addEventListener("click", () => turn(0, state.imgPages));
   window.addEventListener("keydown", (event) => {
     if ($("tab-share").hidden || state.view !== "images" || event.altKey || event.ctrlKey || event.metaKey) { return; }
     if (event.target.closest?.("input, select, textarea")) { return; }
     if (event.key === "ArrowLeft") { event.preventDefault(); turn(-1); }
     if (event.key === "ArrowRight") { event.preventDefault(); turn(1); }
+    if (event.key === "Home") { event.preventDefault(); turn(0, 1); }
+    if (event.key === "End") { event.preventDefault(); turn(0, state.imgPages); }
   });
   $("share-cfg-order").addEventListener("change", () => { state.cfgOrder = $("share-cfg-order").value; state.cfgPage = 1; renderConfigs(); });
   $("share-cfg-prev").addEventListener("click", () => { if (state.cfgPage > 1) { state.cfgPage -= 1; renderConfigs(); } });
   $("share-cfg-next").addEventListener("click", () => { state.cfgPage += 1; renderConfigs(); });
+  $("share-cfg-first").addEventListener("click", () => { state.cfgPage = 1; renderConfigs(); });
+  $("share-cfg-last").addEventListener("click", () => { state.cfgPage = Number.MAX_SAFE_INTEGER; renderConfigs(); });   // renderConfigs keeps it to the last page
   $("share-cfg-refresh").addEventListener("click", () => scan());
 
   /* At start (the full-screen loading waits for it): the first page of pictures, and the NJ81-ED settings (kept ones at
      once, then the list read down to them; the first time the whole list). progress(text) tells how far it is. */
   /* At start the full-screen loading waits only for the page on show: the pictures of that page, or the NJ81-ED
      settings kept from before (the first time: until the first one is found; the rest of the list is read behind). */
+  /* No way to the Keydous servers (no server of ours, not at http://localhost:8080): one clear notice, no calls. */
+  const showBlocked = () => {
+    const note = () => Object.assign(document.createElement("p"), { className: "notice", textContent: t("shareOriginBlocked").replace("{origin}", location.origin) });
+    $("share-images").replaceChildren(note());
+    $("share-configs").replaceChildren(note());
+    for (const id of ["share-img-order", "share-img-first", "share-img-prev", "share-img-next", "share-img-last", "share-cfg-order", "share-cfg-refresh", "share-cfg-first", "share-cfg-prev", "share-cfg-next", "share-cfg-last"]) { $(id).disabled = true; }
+  };
   let preloading = false;
+  /* Always run at start (the full-screen loading waits for it): finds the way to the Keydous servers, then the page on show. */
   const preload = async (progress = () => {}) => {
     preloading = true;
+    await findApi();
+    if (!reachable()) { preloading = false; showBlocked(); return; }
     try { await preloadPage(progress); } finally { preloading = false; }
   };
   const preloadPage = async (progress) => {

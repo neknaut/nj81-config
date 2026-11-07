@@ -5,7 +5,7 @@
   "description": "Edit the RGB lighting and screen of the Keydous NJ81 in the browser with WebHID.",
   "type": "module",
   "scripts": {
-    "start": "python3 -m http.server 8080 --directory public",
+    "start": "node server.mjs",
     "test": "node --test"
   },
   "engines": { "node": ">=20" }
