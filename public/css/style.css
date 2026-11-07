@@ -20,7 +20,13 @@ a { color: var(--accent); } a:hover { color: #b9ceff; }
 .app { min-height: 100vh; display: flex; flex-wrap: wrap; }
 .side { flex: 1 1 240px; max-width: 300px; padding: 28px 20px; background: var(--side); border-right: 1px solid var(--line); display: flex; flex-direction: column; gap: 28px; }
 .main { flex: 999 1 560px; min-width: 0; padding: 32px 36px; display: flex; flex-direction: column; gap: 24px; }
-@media (min-width: 761px) { .side { position: sticky; top: 0; align-self: flex-start; height: 100vh; box-sizing: border-box; overflow-y: auto; } }
+/* Wider than a phone: the sidebar and the page side by side, never wrapped (a wrapped page slid under the sticky sidebar) */
+@media (min-width: 761px) {
+  .app { flex-wrap: nowrap; }
+  .side { flex: 0 0 clamp(220px, 24vw, 300px); position: sticky; top: 0; z-index: 10; align-self: flex-start; height: 100vh; box-sizing: border-box; overflow-y: auto; }
+  .main { flex: 1 1 0; }
+}
+@media (min-width: 761px) and (max-width: 1000px) { .main { padding: 24px 20px; } }
 @media (min-width: 761px) and (max-height: 760px) { .side { gap: 14px; padding: 16px 18px; } .side-foot { gap: 8px; } #connection-help { display: none; } }   /* short screens: the language switch still fits at the bottom */
 @media (max-width: 760px) { .side { max-width: none; border-right: 0; border-bottom: 1px solid var(--line); } .main { padding: 24px 16px; } }
 
