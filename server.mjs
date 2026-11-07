@@ -57,6 +57,7 @@ const cacheFile = (md5, body) => {
   }
 };
 const TIMEOUT_MS = 20_000;
+const FILE_TIMEOUT_MS = 90_000;   // a big GIF (several MB) can take a while to come from Keydous
 
 /* Calls to Keydous wait their turn here. A visitor who has gone (the browser cancelled: another page, another tab) leaves
    the line at once, and a call already running for them is stopped: the next visitor's pictures are not held up by
@@ -103,9 +104,9 @@ const cleanBody = (text, fields) => {
   }
   return out;
 };
-const upstream = async (url, init, gone) => {
+const upstream = async (url, init, gone, timeout = TIMEOUT_MS) => {
   await slot(gone);
-  try { return await fetch(url, { ...init, signal: AbortSignal.any([gone, AbortSignal.timeout(TIMEOUT_MS)]), headers: { ...init?.headers, "User-Agent": "nj81-config" } }); }
+  try { return await fetch(url, { ...init, signal: AbortSignal.any([gone, AbortSignal.timeout(timeout)]), headers: { ...init?.headers, "User-Agent": "nj81-config" } }); }
   finally { release(); }
 };
 const send = (response, status, body, headers = {}) => { response.writeHead(status, { ...SECURITY, ...headers }); response.end(body); };
@@ -124,18 +125,25 @@ const keydous = async (request, response, path) => {
   if (file && request.method === "GET") {
     const kept = fileCache.get(file[1]);
     if (kept) { fileCache.delete(file[1]); fileCache.set(file[1], kept); send(response, 200, kept, fileHeaders); return; }
-    // Keydous sometimes answers a file with 400 / 5xx when asked many at once: asked again twice, a little later each time
-    let answer = null;
-    for (let attempt = 0; attempt < 3; attempt += 1) {
+    // Keydous sometimes answers a file with 400 / 5xx when asked many at once, or sends a big GIF so slowly that it is cut
+    // off: asked again twice, a little later each time. Only a whole file is sent as a file (and kept): a cut-off one sent
+    // as 200 was kept by browsers for a day as an empty picture.
+    let status = 502;
+    let body = null;
+    for (let attempt = 0; attempt < 3 && !body; attempt += 1) {
       if (attempt) { await new Promise((wake) => { setTimeout(wake, 600 * attempt); }); }
       if (gone.aborted) { throw gone.reason; }
-      answer = await upstream(FILE_URL + file[1], undefined, gone);
-      if (answer.ok) { break; }
-      await answer.arrayBuffer().catch(() => {});
+      const answer = await upstream(FILE_URL + file[1], undefined, gone, FILE_TIMEOUT_MS).catch((error) => { if (gone.aborted) { throw error; } return null; });
+      if (!answer) { continue; }
+      status = answer.status;
+      const read = await answer.arrayBuffer().then((b) => Buffer.from(b), () => null);
+      const size = Number(answer.headers.get("content-length"));
+      if (answer.ok && read?.length && (!size || read.length === size)) { body = read; } else if (answer.ok) { status = 502; }
     }
-    const body = Buffer.from(await answer.arrayBuffer().catch(() => new ArrayBuffer(0)));
-    if (answer.ok) { cacheFile(file[1], body); }
-    send(response, answer.status, body, answer.ok ? fileHeaders : { "Content-Type": "application/octet-stream", "Cache-Control": "no-store" });
+    if (gone.aborted) { throw gone.reason; }
+    if (!body) { send(response, status, "", { "Content-Type": "text/plain; charset=utf-8", "Cache-Control": "no-store" }); return; }
+    cacheFile(file[1], body);
+    send(response, 200, body, fileHeaders);
     return;
   }
   const call = KEYDOUS[path];
