@@ -713,8 +713,12 @@ const showTab = (tab) => {
   $("page-sub").textContent = t($("page-sub").dataset.i18n);
 };
 const setControlsEnabled = (on) => {
+  const connecting = on && !ready;
   ready = on;
   if (!on) { $("confirm-pill").hidden = true; }
+  // Once connected the page opens on Lighting, unless a keyboard tab was open before (F5, or a reconnect after unplugging):
+  // before connecting only Log and Guide are there, so being on one of them just means nothing was chosen yet.
+  if (connecting && !$(`tab-${currentTab}`)?.classList.contains("needs-keyboard")) { currentTab = "light"; }
   showTab(currentTab);
 };
 /* The pill next to the title, updated at each step of a change so the page answers the click at once:
