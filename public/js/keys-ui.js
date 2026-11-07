@@ -180,10 +180,25 @@ export const initKeys = (ctx) => {
 
   /* ---------- write ---------- */
   const busy = (on) => { for (const id of ["kconfirm", "kreset", "kread", "kforbidden", "macro-save", "macro-load"]) { $(id).disabled = on; } };
+  /* Reads a layer back after writing `positions`. Feature reports carry no header: a reply meant for someone else (another
+     tab or program talking to the keyboard at the same moment) can land in a page, so a read that changes keys nobody
+     wrote is read again (up to twice) before it is believed. */
+  const readBack = async (fnLayer, positions) => {
+    const nj = getNj();
+    const before = map(fnLayer);
+    let now = null;
+    for (let tries = 0; tries < 3; tries += 1) {
+      now = fnLayer ? await nj.client.readFnLayer(0) : await nj.client.readKeymap(state.profile);
+      const strays = before ? now.filter((b, i) => !positions.includes(i) && b.join() !== before[i].join()).length : 0;
+      if (strays === 0) { break; }
+    }
+    if (fnLayer) { state.fnMap = now; } else { state.normalMap = now; }
+    return now;
+  };
   const write = async (position, bytes) => {
     const nj = getNj();
-    if (state.fn) { await nj.client.setFnKey(0, position, bytes); state.fnMap = await nj.client.readFnLayer(0); }
-    else { await nj.client.setKey(state.profile, position, bytes); state.normalMap = await nj.client.readKeymap(state.profile); }
+    if (state.fn) { await nj.client.setFnKey(0, position, bytes); } else { await nj.client.setKey(state.profile, position, bytes); }
+    await readBack(state.fn, [position]);
   };
   const apply = async (bytes, label, before) => {
     const position = state.selected;
@@ -400,8 +415,34 @@ export const initKeys = (ctx) => {
   $("macro-slot").addEventListener("change", () => { if (state.recording) { toggleRecord(); } state.macroEvents = state.macros?.[Number($("macro-slot").value)]?.events ?? []; showMacro(); });
   $("macro-clear").addEventListener("click", () => { if (state.recording) { toggleRecord(); } state.macroEvents = []; showMacro(); });
 
+  /* A shared setting's keys (Share tab): [{ v: the driver's entry, bytes }] written to the first layer, then read back once. */
+  const applyShared = async (list, name, fnLayer = false) => {
+    const nj = getNj();
+    if (!nj || nj.client.family !== "yc500") { logWarn("areaShare", t("keysUnsupported")); return; }
+    const writes = [];
+    for (const { v, bytes } of list) {
+      let seen = 0;
+      const position = NJ81ED_DEFAULT.findIndex((hid) => hid === v.original && (v.index === undefined || seen++ === v.index));
+      if (position >= 0 && position !== NJ81ED_FN_POSITION) { writes.push({ position, bytes }); }
+    }
+    if (!writes.length) { logWarn("areaShare", t("shareNoKeys")); return; }
+    busy(true);
+    try {
+      for (const w of writes) { if (fnLayer) { await nj.client.setFnKey(0, w.position, w.bytes); } else { await nj.client.setKey(state.profile, w.position, w.bytes); } }
+      const now = await readBack(fnLayer, writes.map((w) => w.position));
+      const kept = writes.filter((w) => now[w.position].join() === w.bytes.join()).length;
+      const text = `${name} (${t(fnLayer ? "layerFn" : "layerNormal")}): ${writes.map((w) => `${keyByPosition.get(w.position)?.label ?? `#${w.position}`} → ${describeAction(decodeAction(w.bytes))}`).join(", ")}`;
+      if (kept === writes.length) { logOk("areaShare", text); } else { logWarn("areaShare", `${t("keysNotKept")} (${writes.length - kept}/${writes.length}): ${text}`); }
+    } catch (error) { logError("areaShare", `${t("applyFailed")}: ${why(error)}`); }
+    busy(false);
+    if (state.selected !== null) { state.pending = configOf(state.fn, state.selected) ?? null; }
+    paint();
+    render();
+  };
+
   return {
     select,
+    applyShared,
     onTab: (tab, ready) => {
       if (tab !== "macro" && state.recording) { toggleRecord(); }
       if (tab === "keys" && ready && getNj() && !state.normalMap) { load(); return; }

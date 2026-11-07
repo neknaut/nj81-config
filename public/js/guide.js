@@ -57,6 +57,15 @@ const VI = [
     "«Xuất JSON» tải hồ sơ về thành file; «Nhập JSON» mở file đó trên máy khác hoặc trình duyệt khác.",
     "«Áp dụng lên bàn phím» gửi cả hồ sơ xuống bàn phím.",
   ]],
+  ["Library", [
+    "Tab Library lấy những gì người dùng Keydous chia sẻ trong tab Share của driver, từ chính máy chủ Keydous. Web chỉ đọc: không cần tài khoản, không đăng, không like, không tăng lượt tải.",
+    "«Ảnh / GIF»: ảnh và GIF cho màn hình của mọi bàn phím Keydous, 12 ảnh một trang, xếp theo «Mới nhất» hoặc «Nổi bật». Bấm «Dùng ảnh này» để đưa ảnh sang tab Màn hình, rồi bấm «Áp dụng lên màn hình» để gửi như ảnh của bạn.",
+    "«Cấu hình NJ81-ED»: chỉ những cấu hình được chia sẻ từ NJ81-ED. Máy chủ không lọc được theo mẫu bàn phím, nên lần đầu web đọc hết danh sách (khoảng một phút) rồi nhớ lại; những lần sau chỉ đọc phần mới. Bấm «Tìm cấu hình mới» để đọc lại.",
+    "Mỗi cấu hình ghi hiệu ứng đèn và các phím đã đổi. «Áp đèn» gửi hiệu ứng đèn, «Áp phím» ghi các phím (hỏi lại trước khi ghi), «Áp cả hai» làm cả hai. Mọi lần ghi đều đọc lại để xác nhận và ghi vào nhật ký.",
+    "Cấu hình lưu từ lớp Fn được ghi vào lớp Fn. Phím Fn không bao giờ bị đổi. Đèn tự vẽ từng phím, nhạc và macro của driver không áp được và được ghi rõ là không áp được.",
+    "Muốn bỏ một cấu hình đã áp: vào tab Phím, chọn phím và bấm «Đặt lại»; đèn thì chọn lại ở tab Đèn.",
+    "Ảnh và cấu hình do người dùng khác đăng. Máy chủ Keydous có thể đổi hoặc ngừng bất cứ lúc nào, khi đó tab báo không lấy được.",
+  ]],
   ["Nhật ký", [
     "Ghi lại mọi việc web đã làm và bàn phím đã trả lời: kết nối, đổi đèn, gán phím, macro, gửi ảnh, đồng bộ giờ.",
     "Mỗi lần kết nối bắt đầu một nhật ký mới; ngắt kết nối thì nhật ký được xoá. «Xoá nhật ký» để xoá bằng tay.",
@@ -126,6 +135,15 @@ const EN = [
     "Name it and «Save in this browser»; pick a saved one and «Load» to bring it back.",
     "«Export JSON» downloads it as a file; «Import JSON» opens that file in another browser or computer.",
     "«Apply to keyboard» sends the whole profile.",
+  ]],
+  ["Library", [
+    "The Library tab shows what Keydous users share in the driver's Share page, from the Keydous servers themselves. Read only: no account, no posting, no likes, no download counts.",
+    "«Pictures / GIFs»: screen pictures and GIFs from every Keydous keyboard, 12 a page, «Newest» or «Featured». «Use this picture» takes it to the Screen tab; «Apply to the screen» sends it like your own.",
+    "«NJ81-ED settings»: only settings shared from an NJ81-ED. The server cannot filter by model, so the first time the page reads the whole list (about a minute) and remembers it; later visits read only what is new. «Look for new settings» reads again.",
+    "Each setting shows its lighting and the keys it changes. «Apply lighting» sends the lighting, «Apply keys» writes the keys (it asks first), «Apply both» does both. Every write is read back and logged.",
+    "A setting saved from the Fn layer goes to the Fn layer. The Fn key is never changed. Per-key drawings, music lighting and driver macros cannot be applied and are marked so.",
+    "To undo: in Keys, pick the key and press «Reset»; pick the lighting again in Lighting.",
+    "Pictures and settings are posted by other users. The Keydous servers can change or stop at any time; the tab then says it cannot reach them.",
   ]],
   ["Log", [
     "Everything the page did and what the keyboard answered: connecting, lighting, keys, macros, pictures, clock.",
