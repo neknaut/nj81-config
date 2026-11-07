@@ -237,15 +237,23 @@ export const initShare = (ctx) => {
   const fileOf = async (image, signal) => {
     const kept = files.get(image.md5);
     if (kept) { files.delete(image.md5); files.set(image.md5, kept); return kept; }   // most recent last
-    // a file that fails (server busy, too many at once, network) is asked again twice, a little later each time
-    let response = null;
-    for (let attempt = 0; attempt < 3; attempt += 1) {
+    // a file that fails (server busy, too many at once, network, cut off) is asked again twice, a little later each time,
+    // past the browser's cache: an earlier server sent cut-off files as good ones, and browsers kept them (empty) a day
+    let blob = null;
+    let failure = "-";
+    for (let attempt = 0; attempt < 3 && !blob; attempt += 1) {
       if (attempt) { await pause(700 * attempt, signal); }
-      try { response = await fetch(API.file + image.md5, { signal }); } catch (error) { if (aborted(error)) { throw error; } response = null; }
-      if (response?.ok) { break; }
+      try {
+        const response = await fetch(API.file + image.md5, { signal, cache: attempt ? "reload" : "default" });
+        failure = `HTTP ${response.status}`;
+        if (!response.ok) { continue; }
+        const data = await response.arrayBuffer();
+        if (!data.byteLength) { failure = "empty"; continue; }
+        blob = await inflate(data);
+        if (!blob.size) { blob = null; failure = "empty"; }
+      } catch (error) { if (aborted(error)) { throw error; } failure = why(error); }
     }
-    if (!response?.ok) { throw new Error(`HTTP ${response?.status ?? "-"}`); }
-    const blob = await inflate(await response.arrayBuffer());
+    if (!blob) { throw new Error(failure); }
     const type = typeOf(image);
     const url = URL.createObjectURL(blob.type === type ? blob : new Blob([blob], { type }));
     const pic = new Image();
