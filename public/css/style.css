@@ -250,13 +250,11 @@ select option { background: var(--panel); color: var(--ink); font-weight: 500; }
 .screen-right { width: 100%; max-width: 440px; }
 .screen-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
 .screen-grid > * { width: 100%; min-width: 0; box-sizing: border-box; }
-.screen-grid button { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.screen-grid button { white-space: normal; text-align: center; line-height: 1.25; min-height: 44px; padding-top: 8px; padding-bottom: 8px; }   /* the whole label, on two lines when narrow (never cut to …) */
 .screen-grid select { text-overflow: ellipsis; }
 .slot-row { display: grid; grid-template-columns: 1fr 1fr; align-items: center; gap: 8px; font-size: 14px; color: var(--muted); font-weight: 600; }
 .slot-row select { width: 100%; }
-#screen-progress { width: 100%; }
 .screen-right .hint { margin: 0; }
-progress { width: 100%; accent-color: var(--accent); }
 input[type="range"] { accent-color: var(--accent); }
 .gallery-box { border-top: 1px solid var(--line); padding-top: 14px; display: flex; flex-direction: column; gap: 8px; }
 .gallery-box h3 { font-size: 15px; }
@@ -379,9 +377,26 @@ button.danger:hover { background: #b02b25; }
 .screen-move .small-btn { flex: none; }
 .thumb canvas, .screen-tile { display: block; }
 /* Applying a picture from the Library: how far, in a modal */
-.apply-progress { display: flex; align-items: center; gap: 10px; }
-.apply-progress progress { flex: 1; height: 10px; }
-.apply-progress output { min-width: 3.5em; text-align: right; font-variant-numeric: tabular-nums; font-weight: 600; }
+/* The progress modal (Apply, Clear): a big number, a thick striped bar; green when done, red when it failed */
+.progress-box { gap: 18px; padding: 24px; --tone: var(--accent); --tone-ink: var(--accent); }
+.progress-box.ok { --tone: var(--ok); --tone-ink: var(--ok-ink); }
+.progress-box.fail { --tone: var(--error); --tone-ink: var(--error); }
+.progress-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 16px; }
+.progress-words { display: flex; flex-direction: column; gap: 4px; min-width: 0; }
+.progress-box h2 { display: flex; align-items: center; gap: 8px; line-height: 1.3; }
+.progress-words p { overflow-wrap: anywhere; }
+.progress-icon { display: none; flex: none; width: 20px; height: 20px; fill: none; stroke: var(--tone-ink); stroke-width: 2.4; stroke-linecap: round; stroke-linejoin: round; }
+.progress-box.ok .icon-ok, .progress-box.fail .icon-fail { display: block; }
+.progress-number { flex: none; font: 700 40px/1 "Space Grotesk", Inter, sans-serif; font-variant-numeric: tabular-nums; color: var(--tone-ink); }
+.progress-number small { font-size: 20px; margin-left: 2px; }
+.progress-track { height: 12px; border-radius: 999px; background: var(--line); overflow: hidden; }
+.progress-fill { height: 100%; width: var(--done, 0%); border-radius: inherit; background-color: var(--tone); transition: width 0.15s;
+  background-image: linear-gradient(135deg, rgba(255, 255, 255, 0.22) 25%, transparent 25%, transparent 50%, rgba(255, 255, 255, 0.22) 50%, rgba(255, 255, 255, 0.22) 75%, transparent 75%, transparent);
+  background-size: 28px 28px; animation: progress-stripes 0.8s linear infinite; }
+.progress-box.ok .progress-fill, .progress-box.fail .progress-fill { background-image: none; animation: none; }
+@keyframes progress-stripes { to { background-position: 28px 0; } }
+.modal-box .progress-hint { font-size: 13px; color: var(--dim); }
+@media (prefers-reduced-motion: reduce) { .progress-fill { animation: none; transition: none; } }
 /* Library: a picture opened big */
 .share-shot:has(canvas) { cursor: zoom-in; }
 .share-shot:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
