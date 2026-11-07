@@ -337,11 +337,17 @@ input[type="range"] { accent-color: var(--accent); }
 .share-panel { position: relative; min-height: 320px; }
 .panel-loading { position: absolute; inset: 0; z-index: 5; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 12px; color: var(--muted); font-size: 14px; background: color-mix(in srgb, var(--panel) 75%, transparent); border-radius: 16px; }
 .panel-loading[hidden] { display: none; }
-.share-grid { transition: opacity 0.15s; }
-.share-grid.busy { opacity: 0.45; pointer-events: none; }   /* the old page stays, dimmed, until the new one is ready */
 .share-card { content-visibility: auto; contain-intrinsic-size: auto 220px; }
+/* A page on its way: grey cards of the real size; a picture not read yet: a moving grey in its place, then it fades in */
+.share-shot.loading { background: linear-gradient(100deg, var(--line) 30%, color-mix(in srgb, var(--line) 55%, var(--raised)) 50%, var(--line) 70%) 0 0 / 300% 100%; animation: shimmer 1.4s ease-in-out infinite; }
+@keyframes shimmer { from { background-position: 100% 0; } to { background-position: 0 0; } }
+.share-shot img { opacity: 0; transition: opacity 0.25s; }
+.share-shot img.in { opacity: 1; }
+.share-card.skeleton .share-meta i { display: block; height: 12px; margin: 2px 0; border-radius: 4px; background: var(--line); width: 70%; }
+.share-card.skeleton .share-meta i + i { width: 45%; height: 10px; }
+.share-card.skeleton .small-btn { border-color: transparent; background: var(--line); opacity: 0.6; }
 /* "Reduce motion": no fades or smooth scrolls (the keyboard drawing also slows to 10 frames a second) */
-@media (prefers-reduced-motion: reduce) { html { scroll-behavior: auto; } .app-loading, .share-grid { transition: none; } }
+@media (prefers-reduced-motion: reduce) { html { scroll-behavior: auto; } .app-loading, .share-shot img { transition: none; } .share-shot.loading { animation: none; } }
 
 /* The page's confirm dialog */
 .modal { padding: 0; border: 1px solid var(--line-2); border-radius: 16px; background: var(--panel); color: var(--ink); width: min(440px, calc(100vw - 32px)); box-shadow: 0 20px 60px rgba(0, 0, 0, 0.5); }

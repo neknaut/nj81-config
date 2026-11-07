@@ -280,38 +280,58 @@ export const initShare = (ctx) => {
     const answer = await post(API.images, { page, per_page: PER_PAGE, company: COMPANY, order_by_date: order === "new" }, signal);
     if (answer.code !== 0) { throw new Error(answer.err_message || "error"); }
     const total = Math.max(1, Math.ceil((answer.data.totle_count || 0) / PER_PAGE));
-    // all the files of the page first: the grid then shows in one go instead of pictures popping in one by one
-    const items = await Promise.all(answer.data.data.map(async (item) => ({
-      item, file: await fileOf(item.bit_image, signal).catch((error) => { if (aborted(error)) { throw error; } return null; }),
-    })));
+    // the files are read together; the page waits for all of them (grey cards meanwhile) and shows in one go
+    const items = answer.data.data.map((item) => ({ item, file: fileOf(item.bit_image, signal) }));
     return { total, items };
   };
   const getPage = (order, page) => {
     const key = keyOf(order, page);
     const kept = pages.get(key);
     if (kept) { return kept.promise; }
-    const entry = { controller: new AbortController(), done: false };
+    const entry = { controller: new AbortController(), done: false, filesDone: false };
+    const drop = () => { if (pages.get(key) === entry) { pages.delete(key); } };
     entry.promise = fetchPage(order, page, entry.controller.signal).then(
       (data) => {
         entry.done = true;
         // a page with a picture that could not be read is not kept: shown once, read again next time
-        if (data.items.some((it) => !it.file)) { queueMicrotask(() => { if (pages.get(key) === entry) { pages.delete(key); } }); }
+        for (const it of data.items) { it.file = it.file.catch((error) => { drop(); if (aborted(error)) { throw error; } return null; }); }
+        Promise.allSettled(data.items.map((it) => it.file)).then(() => { entry.filesDone = true; });
         return data;
       },
-      (error) => { if (pages.get(key) === entry) { pages.delete(key); } throw error; },
+      (error) => { drop(); throw error; },
     );
     pages.set(key, entry);
     return entry.promise;
   };
   let readAhead = 0;   // bumped to stop the reading ahead
-  /* Cancels the reads on their way (all of them, or all but `keep`), and drops pages far from the one on show. */
+  /* Cancels the reads on their way (all of them, or all but `keep`): the list or files of a page left before they came.
+     Drops pages far from the one on show. */
   const cancelPictures = (keep = null) => {
     readAhead += 1;
     for (const [key, entry] of pages) {
+      if (key === keep) { continue; }
       const [order, page] = key.split(":");
       const far = order !== state.imgOrder || Math.abs(Number(page) - state.imgPage) > KEEP;
-      if ((!entry.done && key !== keep) || (far && key !== keep)) { if (!entry.done) { entry.controller.abort(); } pages.delete(key); }
+      if (!entry.filesDone) { entry.controller.abort(); }
+      if (!entry.filesDone || far) { pages.delete(key); }
     }
+  };
+  /* Grey cards in the shape of the real ones while a page is on its way: the panel keeps its size. */
+  const skeletons = () => Array.from({ length: PER_PAGE }, () => {
+    const el = Object.assign(document.createElement("figure"), { className: "share-card skeleton" });
+    el.setAttribute("aria-hidden", "true");
+    el.append(
+      Object.assign(document.createElement("div"), { className: "share-shot loading" }),
+      Object.assign(document.createElement("div"), { className: "share-meta" }),
+      Object.assign(document.createElement("div"), { className: "small-btn" }),
+    );
+    el.children[1].append(document.createElement("i"), document.createElement("i"));
+    return el;
+  });
+  const showSkeletons = () => {
+    const box = $("share-images");
+    if (!box.querySelector(".skeleton")) { box.replaceChildren(...skeletons()); }
+    box.setAttribute("aria-busy", "true");
   };
   const readNext = () => {};   // no reading ahead: a page is read when it is asked for
   const loadImages = async () => {
@@ -321,10 +341,10 @@ export const initShare = (ctx) => {
     cancelPictures(key);
     $("share-img-state").textContent = "";
     pagerState();   // the new page marked at once
-    if (!pages.get(key)?.done) { box.classList.add("busy"); }
+    if (!pages.get(key)?.done) { showSkeletons(); }
     try {
-      const ready = pages.get(key)?.done;
-      const { total, items } = await (ready ? getPage(state.imgOrder, state.imgPage) : wait(() => getPage(state.imgOrder, state.imgPage)));
+      const { total, items } = await getPage(state.imgOrder, state.imgPage);
+      await Promise.all(items.map((it) => it.file));   // every picture read first: the page then shows in one go
       if (key !== keyOf(state.imgOrder, state.imgPage)) { return; }   // the user moved on meanwhile
       state.imgPages = total;
       if (state.imgPage > total) { state.imgPage = total; return loadImages(); }   // a kept page that no longer exists
@@ -337,7 +357,8 @@ export const initShare = (ctx) => {
     } catch (error) {
       if (aborted(error)) { return; }
       $("share-img-state").textContent = `${t("shareFailed")}: ${why(error)}`;
-    } finally { box.classList.remove("busy"); }
+      if (box.querySelector(".skeleton")) { box.replaceChildren(); }
+    } finally { if (key === keyOf(state.imgOrder, state.imgPage)) { box.removeAttribute("aria-busy"); } }
     remember();
     pagerState();
   };
@@ -360,10 +381,15 @@ export const initShare = (ctx) => {
     const use = Object.assign(document.createElement("button"), { type: "button", className: "small-btn", textContent: t("shareUsePicture") });
     use.disabled = true;
     el.append(shot, meta, use);
-    if (!file) { shot.textContent = "✕"; return el; }
-    {
-      const { url, type } = file;
-      shot.append(Object.assign(document.createElement("img"), { src: url, alt: image.title || "", decoding: "sync" }));
+    shot.classList.add("loading");   // a moving grey until the picture is read
+    file.then((got) => {
+      shot.classList.remove("loading");
+      if (!got) { shot.textContent = "✕"; return; }
+      const { url, type } = got;
+      const img = Object.assign(document.createElement("img"), { src: url, alt: image.title || "" });
+      img.addEventListener("load", () => img.classList.add("in"), { once: true });
+      if (img.complete) { img.classList.add("in"); }
+      shot.append(img);
       use.disabled = false;
       use.addEventListener("click", async () => {
         cancelAll();
@@ -372,7 +398,7 @@ export const initShare = (ctx) => {
         usePicture(new File([typed], name, { type }));
         logOk("areaShare", `${t("sharePictureTaken")}: ${image.title || name} (${item.user_name || "?"})`);
       });
-    }
+    }, () => { /* the page was left: its cards are gone */ });
     return el;
   };
 
@@ -513,6 +539,7 @@ export const initShare = (ctx) => {
   let apiFound = null;
   const show = async (view) => {
     if (!apiFound) { apiFound = findApi(); }
+    if (view === "images" && !$("share-images").children.length) { showSkeletons(); }   // the panel at its full size at once
     await apiFound;
     if (!reachable()) { showBlocked(); }
     if (!reachable()) {   // only the notice: nothing to read
