@@ -261,10 +261,11 @@ export const initShare = (ctx) => {
     }
     return file;
   };
-  /* Pages of pictures, list and files together, by "order:page". The page on show is read first; then the next AHEAD
-     pages are read one after the other in the background, so "next" shows at once. Anything else the user does (another
-     tab, the other list, another order, an Apply button) cancels the reads still on their way. */
-  const AHEAD = 3;
+  /* Pages of pictures, list and files together, by "order:page". Only the page asked for is read: nothing is read ahead,
+     so the Keydous servers are not asked for many files at once (which made pictures go missing). Pages already read
+     stay (up to KEEP pages either side), so going back shows at once. Anything else the user does (another tab, the
+     other list, another order, an Apply button) cancels the reads still on their way. */
+  const KEEP = 3;
   const pages = new Map();   // key -> { promise, controller, done }
   const keyOf = (order, page) => `${order}:${page}`;
   const fetchPage = async (order, page, signal) => {
@@ -300,19 +301,11 @@ export const initShare = (ctx) => {
     readAhead += 1;
     for (const [key, entry] of pages) {
       const [order, page] = key.split(":");
-      const far = order !== state.imgOrder || Math.abs(Number(page) - state.imgPage) > AHEAD;
+      const far = order !== state.imgOrder || Math.abs(Number(page) - state.imgPage) > KEEP;
       if ((!entry.done && key !== keep) || (far && key !== keep)) { if (!entry.done) { entry.controller.abort(); } pages.delete(key); }
     }
   };
-  const idle = (run) => new Promise((resolve) => { (window.requestIdleCallback ?? ((f) => setTimeout(f, 200)))(() => resolve(run === readAhead), { timeout: 1500 }); });
-  const readNext = async () => {
-    const run = ++readAhead;
-    if (navigator.connection?.saveData) { return; }   // the user asked the browser to save data: only what is asked for
-    for (let page = state.imgPage + 1; page <= Math.min(state.imgPages, state.imgPage + AHEAD); page += 1) {   // none on the last page
-      if (!(await idle(run))) { return; }
-      try { await getPage(state.imgOrder, page); } catch (error) { return; }
-    }
-  };
+  const readNext = () => {};   // no reading ahead: a page is read when it is asked for
   const loadImages = async () => {
     if (!reachable()) { return; }
     const box = $("share-images");

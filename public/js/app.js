@@ -1122,18 +1122,12 @@ const importJson = async (event) => {
 };
 
 /* ---------- start ---------- */
-/* The page shows a full-screen loading until it is ready: built, the keyboard this site may use connected and read (or
-   found missing), and the Library loaded (its first page of pictures and the NJ81-ED settings). At most 90 s (the very
-   first visit reads the whole list of shared settings once). */
+/* The page shows a full-screen loading until it is ready: built, and the keyboard this site may use connected and read
+   (or found missing); at most 15 s. The Library calls the Keydous servers only when its tab is opened, so a slow or
+   failing server never holds up the page. */
 let booted = false;
-let keyboardSettled = false;
-let libraryReady = false;
-const bootText = (text) => { const el = document.querySelector("#app-loading span"); if (el && text) { el.textContent = text; } };
 const finishBoot = (force = false) => {
   if (booted) { return; }
-  if (force !== true) { keyboardSettled = true; }
-  // the Library is a tab only with a keyboard: without one there is nothing of it to wait for
-  if (force !== true && !(keyboardSettled && (libraryReady || !ready))) { return; }
   booted = true;
   let gone = false;
   const lift = () => {
@@ -1264,8 +1258,7 @@ const init = () => {
     navigator.hid.addEventListener("disconnect", (event) => { if (event.device === session.device) { session.close(); } });
   }
   else { finishBoot(); }
-  share.preload(bootText).catch(() => {}).finally(() => { libraryReady = true; if (keyboardSettled) { finishBoot(); } });
-  setTimeout(() => finishBoot(true), 90000);
+  setTimeout(() => finishBoot(true), 15000);
   requestAnimationFrame(frame);
 };
 
