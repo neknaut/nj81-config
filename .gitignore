@@ -7,3 +7,6 @@ node_modules/
 
 # Local analysis of the official Keydous driver (contains their code): never commit
 driver-analysis/
+
+# wrangler dev state
+.wrangler/

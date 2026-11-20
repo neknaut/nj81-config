@@ -1,0 +1,13 @@
+// Cloudflare Workers with static assets: `npx wrangler deploy` (see README, Deployment > Cloudflare).
+{
+  "$schema": "https://unpkg.com/wrangler/config-schema.json",
+  "name": "nj81-config",
+  "main": "worker.mjs",
+  "compatibility_date": "2026-11-01",   // after 2024-09-02: fetch() keeps custom ports (Keydous :3814 / :3816)
+  "observability": { "enabled": true },   // Workers Logs in the dashboard: what Keydous answered when a call fails
+  "assets": {
+    "directory": "./public",
+    "binding": "ASSETS",
+    "run_worker_first": ["/keydous/*"]   // everything else is served by Cloudflare without running the Worker
+  }
+}
