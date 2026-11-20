@@ -237,7 +237,6 @@ const start = async () => {
         console.warn(`To use :${PORT}, close that program (find it with the command below) and run npm start again.`);
         console.warn(whoHolds(PORT));
       }
-      keepAlive();
       return;
     } catch (error) {
       if (error.code !== "EADDRINUSE") { throw error; }
@@ -254,19 +253,3 @@ const start = async () => {
   }
 };
 start().catch((error) => { console.error(error.message); process.exit(1); });
-
-/* Keep-alive (as the slack-bot does): a free Render web service sleeps after 15 minutes without a visit, and the next visitor
-   then waits ~50 s. Every 10 minutes the server visits its own public address, which Render gives in RENDER_EXTERNAL_URL.
-   Elsewhere (no such variable) nothing happens. A sleeping service cannot wake itself: this keeps an awake one awake. */
-function keepAlive() {
-  const base = (process.env.RENDER_EXTERNAL_URL || "").replace(/\/+$/, "");
-  if (!base) { return; }
-  const ping = async () => {
-    try {
-      const answer = await fetch(`${base}/keydous/ping`, { signal: AbortSignal.timeout(30_000), headers: { "User-Agent": "nj81-config keep-alive" } });
-      if (answer.status !== 204) { console.warn(`keep-alive: ${base} answered ${answer.status}`); }
-    } catch (error) { console.warn(`keep-alive: ${error.message}`); }
-  };
-  setInterval(ping, 10 * 60_000).unref();
-  console.log(`keep-alive: ${base}/keydous/ping every 10 min`);
-}
