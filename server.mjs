@@ -9,7 +9,7 @@ import { readFile, stat } from "node:fs/promises";
 import { extname, join, normalize, resolve, sep } from "node:path";
 import { fileURLToPath } from "node:url";
 import { brotliCompressSync, gzipSync, constants as zlib } from "node:zlib";
-import { APP, BODY_LIMIT, FILE_HEADERS, FILE_PATH, KEYDOUS, SECURITY, TIMEOUT_MS, cleanBody, fetchFile, rateLimit } from "./keydous.mjs";
+import { APP, BODY_LIMIT, FILE_HEADERS, FILE_PATH, KEYDOUS, SECURITY, TIMEOUT_MS, cleanBody, fetchFile, fetchList, rateLimit } from "./keydous.mjs";
 
 const ROOT = resolve(fileURLToPath(new URL("./public/", import.meta.url)));
 /* Nothing to configure. A Node host (Railway, Fly, Heroku…) gives the port in PORT: then that port, on every interface,
@@ -96,8 +96,9 @@ const keydous = async (request, response, path) => {
   if (!call || request.method !== "POST") { send(response, 404, "Not found", { "Content-Type": "text/plain; charset=utf-8" }); return; }
   let body;
   try { body = cleanBody(await readBody(request), call.fields); } catch (error) { send(response, 400, JSON.stringify({ code: -1, err_message: "Bad request" }), { "Content-Type": "application/json" }); return; }
-  const answer = await upstream(call.url, gone, TIMEOUT_MS, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
-  send(response, answer.status, await answer.text(), { "Content-Type": answer.headers.get("content-type") ?? "application/json", "Cache-Control": "no-store" });
+  const { reply, tries } = await fetchList(call, body, (url, timeout, init) => upstream(url, gone, timeout, init), () => gone.aborted);
+  if (!reply) { send(response, 502, JSON.stringify({ code: -1, err_message: "Keydous did not answer" }), { "Content-Type": "application/json", "X-Upstream": tries.join(",") }); return; }
+  send(response, reply.status, await reply.text(), { "Content-Type": reply.headers.get("content-type") ?? "application/json", "Cache-Control": "no-store", "X-Upstream": tries.join(",") });
 };
 
 /* ---------- the page ---------- */

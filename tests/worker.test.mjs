@@ -87,3 +87,30 @@ test("calls do not wait on each other (a Worker request may not wake another one
   assert.ok(replies.every((reply) => reply.status === 200));
   assert.equal(most, 8);
 });
+
+test("a list call that fails the TLS handshake (525) is tried again", async () => {
+  let tries = 0;
+  globalThis.fetch = async () => { tries += 1; return tries === 1 ? new Response("", { status: 525 }) : new Response('{"code":0}'); };
+  const reply = await call("/keydous/images", { method: "POST", body: JSON.stringify({ page: 1 }) });
+  assert.equal(reply.status, 200);
+  assert.equal(reply.headers.get("x-upstream"), "525,200");
+});
+
+test("a list call Keydous keeps failing answers 502, not Keydous's own status", async () => {
+  globalThis.fetch = async () => new Response("", { status: 525 });
+  const warn = console.warn;
+  console.warn = () => {};
+  try {
+    const reply = await call("/keydous/configs", { method: "POST", body: JSON.stringify({ page: 1 }) });
+    assert.equal(reply.status, 502);
+    assert.equal(reply.headers.get("x-upstream"), "525,525,525");
+  } finally { console.warn = warn; }
+});
+
+test("a 4xx from Keydous is passed on without trying again", async () => {
+  let tries = 0;
+  globalThis.fetch = async () => { tries += 1; return new Response('{"code":1}', { status: 400 }); };
+  const reply = await call("/keydous/images", { method: "POST", body: JSON.stringify({ page: 1 }) });
+  assert.equal(reply.status, 400);
+  assert.equal(tries, 1);
+});

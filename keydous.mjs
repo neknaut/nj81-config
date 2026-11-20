@@ -43,7 +43,7 @@ export const BODY_LIMIT = 2048;   // bytes of a list call's body
 export const FILE_PATH = /^\/keydous\/file\/([0-9a-f]{32})$/;   // a picture, named by its md5
 // a file is named by its md5: it never changes, browsers may keep it a day
 export const FILE_HEADERS = { "Content-Type": "application/octet-stream", "Cache-Control": "public, max-age=86400, immutable" };
-const FILE_TRIES = 3;
+const TRIES = 3;   // calls to Keydous for one request: it sometimes fails a TLS handshake (525) or answers "busy"
 const RETRY_STEP_MS = 600;
 const RETRY_JITTER_MS = 400;   // spreads the retries of a page of pictures, so they do not reach Keydous all at once again
 
@@ -63,15 +63,19 @@ export const rateLimit = () => {
   };
 };
 
+const beforeTry = async (attempt, stopped) => {
+  if (attempt) { await new Promise((wake) => { setTimeout(wake, RETRY_STEP_MS * attempt + Math.random() * RETRY_JITTER_MS); }); }
+  if (stopped()) { throw new DOMException("The visitor has gone", "AbortError"); }
+};
+
 /* One picture from Keydous. It sometimes answers 400 / 5xx when asked many at once, or cuts a big GIF off: asked again
    twice, a little later each time. Only a whole file is returned (a cut-off one sent as 200 was kept by browsers for a
    day as an empty picture). get(url, timeout) makes the call; stopped() ends the tries when the visitor has gone.
    Returns { body: ArrayBuffer | null, tries: what Keydous answered each time (sent back in X-Upstream) }. */
 export const fetchFile = async (md5, get, stopped = () => false) => {
   const tries = [];
-  for (let attempt = 0; attempt < FILE_TRIES; attempt += 1) {
-    if (attempt) { await new Promise((wake) => { setTimeout(wake, RETRY_STEP_MS * attempt + Math.random() * RETRY_JITTER_MS); }); }
-    if (stopped()) { throw new DOMException("The visitor has gone", "AbortError"); }
+  for (let attempt = 0; attempt < TRIES; attempt += 1) {
+    await beforeTry(attempt, stopped);
     const reply = await get(FILE_URL + md5, FILE_TIMEOUT_MS).catch((error) => { if (stopped()) { throw error; } tries.push(error?.name ?? "error"); return null; });
     if (!reply) { continue; }
     const body = await reply.arrayBuffer().catch(() => null);
@@ -81,4 +85,21 @@ export const fetchFile = async (md5, get, stopped = () => false) => {
     if (whole) { return { body, tries }; }
   }
   return { body: null, tries };
+};
+
+/* A list call (images or shared settings: read only, so safe to repeat). A network error or a 5xx (including Cloudflare's
+   52x when the TLS handshake with Keydous fails) is tried again; any other answer is returned as it is.
+   get(url, timeout, init) makes the call. Returns { reply: Response | null, tries } as fetchFile does. */
+export const fetchList = async (call, body, get, stopped = () => false) => {
+  const init = { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) };
+  const tries = [];
+  for (let attempt = 0; attempt < TRIES; attempt += 1) {
+    await beforeTry(attempt, stopped);
+    const reply = await get(call.url, TIMEOUT_MS, init).catch((error) => { if (stopped()) { throw error; } tries.push(error?.name ?? "error"); return null; });
+    if (!reply) { continue; }
+    tries.push(reply.status);
+    if (reply.status < 500) { return { reply, tries }; }
+    await reply.body?.cancel();
+  }
+  return { reply: null, tries };
 };

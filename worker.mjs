@@ -4,7 +4,7 @@
      http://localhost:8080). Only these calls, with checked bodies, as in server.mjs: it is not an open proxy.
    Keydous uses ports 3814 and 3816: fetch() keeps them (allow_custom_ports, on by default since compatibility date
    2024-09-02). Config: wrangler.jsonc. */
-import { APP, BODY_LIMIT, FILE_HEADERS, FILE_PATH, KEYDOUS, SECURITY, TIMEOUT_MS, cleanBody, fetchFile, rateLimit } from "./keydous.mjs";
+import { APP, BODY_LIMIT, FILE_HEADERS, FILE_PATH, KEYDOUS, SECURITY, TIMEOUT_MS, cleanBody, fetchFile, fetchList, rateLimit } from "./keydous.mjs";
 
 /* No limit on calls to Keydous at once (server.mjs has one): in a Worker a request may not wake another one waiting in a
    shared queue (the runtime cancels it as hung). Each call stands alone; Keydous's "busy" answers are retried. */
@@ -28,9 +28,12 @@ const list = async (request, call) => {
   if (Number(request.headers.get("content-length")) > BODY_LIMIT) { return json(400, "Bad request"); }
   let body;
   try { body = cleanBody(await request.text(), call.fields); } catch (error) { return json(400, "Bad request"); }
-  const reply = await upstream(call.url, TIMEOUT_MS, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
-  if (!reply.ok) { console.warn(`${call.url}: Keydous answered ${reply.status}`); }
-  return answer(reply.status, await reply.text(), { "Content-Type": reply.headers.get("content-type") ?? "application/json", "Cache-Control": "no-store" });
+  const { reply, tries } = await fetchList(call, body, upstream);
+  if (!reply) {
+    console.warn(`${call.url}: Keydous answered ${tries.join(", ")}`);
+    return json(502, "Keydous did not answer", { "X-Upstream": tries.join(",") });
+  }
+  return answer(reply.status, await reply.text(), { "Content-Type": reply.headers.get("content-type") ?? "application/json", "Cache-Control": "no-store", "X-Upstream": tries.join(",") });
 };
 
 const keydous = (request, path) => {
