@@ -74,3 +74,17 @@ test("when Keydous keeps failing the Worker answers 502 and says what Keydous an
     assert.equal(reply.headers.get("x-upstream"), "500,500,500");
   } finally { console.warn = warn; }
 });
+
+test("calls do not wait on each other (a Worker request may not wake another one)", async () => {
+  let open = 0;
+  let most = 0;
+  globalThis.fetch = async () => {
+    open += 1; most = Math.max(most, open);
+    await new Promise((wake) => { setTimeout(wake, 20); });
+    open -= 1;
+    return new Response(new Uint8Array([1]), { headers: { "content-length": "1" } });
+  };
+  const replies = await Promise.all(Array.from({ length: 8 }, (unused, i) => call(`/keydous/file/${String(i).repeat(32)}`)));
+  assert.ok(replies.every((reply) => reply.status === 200));
+  assert.equal(most, 8);
+});

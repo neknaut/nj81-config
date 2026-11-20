@@ -6,22 +6,18 @@
    (allow_custom_ports), for hosts that are not behind Cloudflare. Config: wrangler.jsonc. */
 import { APP, FILE_TIMEOUT_MS, FILE_URL, KEYDOUS, SECURITY, TIMEOUT_MS, cleanBody } from "./keydous.mjs";
 
-const UPSTREAM_AT_ONCE = 4;   // calls to Keydous at the same time from one Worker instance: more and it answers "busy"
 /* A visitor may make this many calls a minute (a page of pictures is 12 files). Kept per Worker instance: a best effort. */
 const PER_VISITOR = { lists: 120, files: 900, perMs: 60_000 };
 const BODY_LIMIT = 2048;
 const FILE_TRIES = 3;
 const RETRY_STEP_MS = 600;
+const RETRY_JITTER_MS = 400;   // spread the retries of a page of pictures, so they do not reach Keydous all at once again
 
-let running = 0;
-const waiting = [];
-const slot = () => new Promise((go) => { if (running < UPSTREAM_AT_ONCE) { running += 1; go(); } else { waiting.push(go); } });
-const release = () => { const next = waiting.shift(); if (next) { next(); } else { running -= 1; } };
-const upstream = async (url, init, timeout = TIMEOUT_MS) => {
-  await slot();
-  try { return await fetch(url, { ...init, signal: AbortSignal.timeout(timeout), headers: { ...init?.headers, "User-Agent": "nj81-config" } }); }
-  finally { release(); }
-};
+/* No shared limit on calls to Keydous at once (server.mjs has one): in a Worker, a request may not wake another one
+   waiting in a shared queue (the runtime cancels it as hung). Each call stands alone; Keydous's "busy" answers are retried. */
+const upstream = (url, init, timeout = TIMEOUT_MS) => fetch(url, {
+  ...init, signal: AbortSignal.timeout(timeout), headers: { ...init?.headers, "User-Agent": "nj81-config" },
+});
 
 const visitors = new Map();   // address -> { lists, files, since }
 const allowed = (address, kind) => {
@@ -50,7 +46,7 @@ const file = async (request, md5, ctx) => {
   if (kept) { return answer(200, kept.body, FILE_HEADERS); }
   const tries = [];   // what Keydous answered each time: sent back in X-Upstream and logged (Workers Logs)
   for (let attempt = 0; attempt < FILE_TRIES; attempt += 1) {
-    if (attempt) { await new Promise((wake) => { setTimeout(wake, RETRY_STEP_MS * attempt); }); }
+    if (attempt) { await new Promise((wake) => { setTimeout(wake, RETRY_STEP_MS * attempt + Math.random() * RETRY_JITTER_MS); }); }
     const reply = await upstream(FILE_URL + md5, undefined, FILE_TIMEOUT_MS).catch((error) => { tries.push(error?.name ?? "error"); return null; });
     if (!reply) { continue; }
     const body = await reply.arrayBuffer().catch(() => null);
