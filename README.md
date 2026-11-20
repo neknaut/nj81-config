@@ -132,7 +132,7 @@ npm run cf:dev     # the Cloudflare version locally (npx wrangler dev)
 |---|---|
 | [`server.mjs`](server.mjs) | Static server (brotli/gzip, ETag so a repeat visit downloads only what changed), security headers, the Library's `/keydous/*` requests; `npm start` on this computer |
 | [`worker.mjs`](worker.mjs), [`wrangler.jsonc`](wrangler.jsonc), [`public/_headers`](public/_headers) | The same on Cloudflare Workers (Library calls in the Worker, `public/` served by Cloudflare) |
-| [`keydous.mjs`](keydous.mjs) | What both share: the Keydous addresses, the body checks, the security headers |
+| [`keydous.mjs`](keydous.mjs) | What both share: the Keydous addresses, body checks, per-visitor limit, picture retries, security headers |
 | [`public/js/royuan.js`](public/js/royuan.js) | The NJ81 vendor protocol: identify, lighting, clock, screen, key map, Fn layer, macros |
 | [`public/js/app.js`](public/js/app.js) | Wires the page together: tabs, lighting, screen, profiles, loading |
 | [`public/js/keymap.js`](public/js/keymap.js), [`keys-ui.js`](public/js/keys-ui.js) | Key and macro encoding; the Keys and Macro tabs |

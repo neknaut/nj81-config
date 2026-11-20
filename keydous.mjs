@@ -35,3 +35,50 @@ export const cleanBody = (text, fields) => {
   }
   return out;
 };
+
+/* A visitor may make this many calls a minute: lists are few; a page of pictures is 12 files, so files get more room
+   (pages turned quickly must not run out and lose their pictures). */
+export const PER_VISITOR = { lists: 120, files: 900, perMs: 60_000 };
+export const BODY_LIMIT = 2048;   // bytes of a list call's body
+export const FILE_PATH = /^\/keydous\/file\/([0-9a-f]{32})$/;   // a picture, named by its md5
+// a file is named by its md5: it never changes, browsers may keep it a day
+export const FILE_HEADERS = { "Content-Type": "application/octet-stream", "Cache-Control": "public, max-age=86400, immutable" };
+const FILE_TRIES = 3;
+const RETRY_STEP_MS = 600;
+const RETRY_JITTER_MS = 400;   // spreads the retries of a page of pictures, so they do not reach Keydous all at once again
+
+/* allowed(address, "lists" | "files"): false once the visitor has made PER_VISITOR calls of that kind this minute. */
+export const rateLimit = () => {
+  const visitors = new Map();   // address -> { lists, files, since }
+  return (address, kind) => {
+    const now = Date.now();
+    let visitor = visitors.get(address);
+    if (!visitor || now - visitor.since > PER_VISITOR.perMs) {
+      visitor = { lists: 0, files: 0, since: now };
+      visitors.set(address, visitor);
+      for (const [key, old] of visitors) { if (now - old.since > PER_VISITOR.perMs) { visitors.delete(key); } }
+    }
+    visitor[kind] += 1;
+    return visitor[kind] <= PER_VISITOR[kind];
+  };
+};
+
+/* One picture from Keydous. It sometimes answers 400 / 5xx when asked many at once, or cuts a big GIF off: asked again
+   twice, a little later each time. Only a whole file is returned (a cut-off one sent as 200 was kept by browsers for a
+   day as an empty picture). get(url, timeout) makes the call; stopped() ends the tries when the visitor has gone.
+   Returns { body: ArrayBuffer | null, tries: what Keydous answered each time (sent back in X-Upstream) }. */
+export const fetchFile = async (md5, get, stopped = () => false) => {
+  const tries = [];
+  for (let attempt = 0; attempt < FILE_TRIES; attempt += 1) {
+    if (attempt) { await new Promise((wake) => { setTimeout(wake, RETRY_STEP_MS * attempt + Math.random() * RETRY_JITTER_MS); }); }
+    if (stopped()) { throw new DOMException("The visitor has gone", "AbortError"); }
+    const reply = await get(FILE_URL + md5, FILE_TIMEOUT_MS).catch((error) => { if (stopped()) { throw error; } tries.push(error?.name ?? "error"); return null; });
+    if (!reply) { continue; }
+    const body = await reply.arrayBuffer().catch(() => null);
+    const size = Number(reply.headers.get("content-length"));
+    const whole = reply.ok && body?.byteLength > 0 && (!size || body.byteLength === size);
+    tries.push(whole || !reply.ok ? reply.status : `cut:${body?.byteLength ?? 0}/${size || "?"}`);
+    if (whole) { return { body, tries }; }
+  }
+  return { body: null, tries };
+};

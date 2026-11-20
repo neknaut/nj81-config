@@ -9,7 +9,7 @@ import { readFile, stat } from "node:fs/promises";
 import { extname, join, normalize, resolve, sep } from "node:path";
 import { fileURLToPath } from "node:url";
 import { brotliCompressSync, gzipSync, constants as zlib } from "node:zlib";
-import { APP, FILE_TIMEOUT_MS, FILE_URL, KEYDOUS, SECURITY, TIMEOUT_MS, cleanBody } from "./keydous.mjs";
+import { APP, BODY_LIMIT, FILE_HEADERS, FILE_PATH, KEYDOUS, SECURITY, TIMEOUT_MS, cleanBody, fetchFile, rateLimit } from "./keydous.mjs";
 
 const ROOT = resolve(fileURLToPath(new URL("./public/", import.meta.url)));
 /* Nothing to configure. A Node host (Railway, Fly, Heroku…) gives the port in PORT: then that port, on every interface,
@@ -27,9 +27,6 @@ const TYPES = {
 
 /* ---------- the Library's Keydous calls ---------- */
 const UPSTREAM_AT_ONCE = 4;   // calls to Keydous at the same time, for every visitor together: more and it answers "busy"
-/* A visitor may make this many calls a minute: lists are few; a page of pictures is 12 files, so files get more room
-   (pages turned quickly must not run out and lose their pictures). */
-const PER_VISITOR = { lists: 120, files: 900, perMs: 60_000 };
 /* Files kept in memory (they never change: named by md5), up to FILE_CACHE_BYTES: a picture asked for again (another visitor,
    another order) does not go to Keydous again. */
 const FILE_CACHE_BYTES = 40 * 1024 * 1024;
@@ -59,26 +56,18 @@ const slot = (gone) => new Promise((go, fail) => {
 });
 const release = () => { const next = queue.shift(); if (next) { next.go(); } else { running -= 1; } };
 
-const visitors = new Map();   // address -> { count, since }
-const allowed = (address, kind) => {
-  const now = Date.now();
-  let v = visitors.get(address);
-  if (!v || now - v.since > PER_VISITOR.perMs) { v = { lists: 0, files: 0, since: now }; visitors.set(address, v); }
-  v[kind] += 1;
-  return v[kind] <= PER_VISITOR[kind];
-};
-setInterval(() => { const now = Date.now(); for (const [a, v] of visitors) { if (now - v.since > PER_VISITOR.perMs) { visitors.delete(a); } } }, PER_VISITOR.perMs).unref();
+const allowed = rateLimit();
 
-const readBody = (request, limit = 2048) => new Promise((done, fail) => {
+const readBody = (request, limit = BODY_LIMIT) => new Promise((done, fail) => {
   let size = 0;
   const parts = [];
   request.on("data", (part) => { size += part.length; if (size > limit) { fail(new Error("too big")); request.destroy(); } else { parts.push(part); } });
   request.on("end", () => done(Buffer.concat(parts).toString("utf8")));
   request.on("error", fail);
 });
-const upstream = async (url, init, gone, timeout = TIMEOUT_MS) => {
+const upstream = async (url, gone, timeout = TIMEOUT_MS, init = {}) => {
   await slot(gone);
-  try { return await fetch(url, { ...init, signal: AbortSignal.any([gone, AbortSignal.timeout(timeout)]), headers: { ...init?.headers, "User-Agent": "nj81-config" } }); }
+  try { return await fetch(url, { ...init, signal: AbortSignal.any([gone, AbortSignal.timeout(timeout)]), headers: { ...init.headers, "User-Agent": "nj81-config" } }); }
   finally { release(); }
 };
 const send = (response, status, body, headers = {}) => { response.writeHead(status, { ...SECURITY, ...headers }); response.end(body); };
@@ -87,42 +76,27 @@ const keydous = async (request, response, path) => {
   // behind a host's proxy the visitor's address is the first of X-Forwarded-For
   const visitor = String(request.headers["x-forwarded-for"] ?? "").split(",")[0].trim() || request.socket.remoteAddress || "?";
   if (path === "/keydous/ping") { send(response, 204, undefined, { "Cache-Control": "no-store", "X-App": APP }); return; }
-  const file = /^\/keydous\/file\/([0-9a-f]{32})$/.exec(path);
+  const file = FILE_PATH.exec(path);
   if (!allowed(visitor, file ? "files" : "lists")) { send(response, 429, JSON.stringify({ code: -1, err_message: "Too many requests" }), { "Content-Type": "application/json", "Retry-After": "5" }); return; }
   const leaving = new AbortController();   // the browser cancelled or went away before the answer
   response.on("close", () => { if (!response.writableEnded) { leaving.abort(); } });
   const gone = leaving.signal;
-  // a file is named by its md5: it never changes, browsers may keep it a day
-  const fileHeaders = { "Content-Type": "application/octet-stream", "Cache-Control": "public, max-age=86400, immutable" };
   if (file && request.method === "GET") {
-    const kept = fileCache.get(file[1]);
-    if (kept) { fileCache.delete(file[1]); fileCache.set(file[1], kept); send(response, 200, kept, fileHeaders); return; }
-    // Keydous sometimes answers a file with 400 / 5xx when asked many at once, or sends a big GIF so slowly that it is cut
-    // off: asked again twice, a little later each time. Only a whole file is sent as a file (and kept): a cut-off one sent
-    // as 200 was kept by browsers for a day as an empty picture.
-    let status = 502;
-    let body = null;
-    for (let attempt = 0; attempt < 3 && !body; attempt += 1) {
-      if (attempt) { await new Promise((wake) => { setTimeout(wake, 600 * attempt); }); }
-      if (gone.aborted) { throw gone.reason; }
-      const answer = await upstream(FILE_URL + file[1], undefined, gone, FILE_TIMEOUT_MS).catch((error) => { if (gone.aborted) { throw error; } return null; });
-      if (!answer) { continue; }
-      status = answer.status;
-      const read = await answer.arrayBuffer().then((b) => Buffer.from(b), () => null);
-      const size = Number(answer.headers.get("content-length"));
-      if (answer.ok && read?.length && (!size || read.length === size)) { body = read; } else if (answer.ok) { status = 502; }
-    }
-    if (gone.aborted) { throw gone.reason; }
-    if (!body) { send(response, status, "", { "Content-Type": "text/plain; charset=utf-8", "Cache-Control": "no-store" }); return; }
-    cacheFile(file[1], body);
-    send(response, 200, body, fileHeaders);
+    const md5 = file[1];
+    const kept = fileCache.get(md5);
+    if (kept) { fileCache.delete(md5); fileCache.set(md5, kept); send(response, 200, kept, FILE_HEADERS); return; }
+    const { body, tries } = await fetchFile(md5, (url, timeout) => upstream(url, gone, timeout), () => gone.aborted);
+    if (!body) { send(response, 502, "", { "Content-Type": "text/plain; charset=utf-8", "Cache-Control": "no-store", "X-Upstream": tries.join(",") }); return; }
+    const whole = Buffer.from(body);
+    cacheFile(md5, whole);
+    send(response, 200, whole, { ...FILE_HEADERS, "X-Upstream": tries.join(",") });
     return;
   }
   const call = KEYDOUS[path];
   if (!call || request.method !== "POST") { send(response, 404, "Not found", { "Content-Type": "text/plain; charset=utf-8" }); return; }
   let body;
   try { body = cleanBody(await readBody(request), call.fields); } catch (error) { send(response, 400, JSON.stringify({ code: -1, err_message: "Bad request" }), { "Content-Type": "application/json" }); return; }
-  const answer = await upstream(call.url, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) }, gone);
+  const answer = await upstream(call.url, gone, TIMEOUT_MS, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
   send(response, answer.status, await answer.text(), { "Content-Type": answer.headers.get("content-type") ?? "application/json", "Cache-Control": "no-store" });
 };
 

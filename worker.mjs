@@ -2,96 +2,53 @@
    - public/ is served by Cloudflare itself, with the security headers of public/_headers (the Worker does not run for it).
    - /keydous/*: the Library's three Keydous calls, made from here (the Keydous servers answer a browser only at
      http://localhost:8080). Only these calls, with checked bodies, as in server.mjs: it is not an open proxy.
-   Needs fetch() to custom ports (Keydous uses :3814 and :3816): on by default since compatibility date 2024-09-02
-   (allow_custom_ports), for hosts that are not behind Cloudflare. Config: wrangler.jsonc. */
-import { APP, FILE_TIMEOUT_MS, FILE_URL, KEYDOUS, SECURITY, TIMEOUT_MS, cleanBody } from "./keydous.mjs";
+   Keydous uses ports 3814 and 3816: fetch() keeps them (allow_custom_ports, on by default since compatibility date
+   2024-09-02). Config: wrangler.jsonc. */
+import { APP, BODY_LIMIT, FILE_HEADERS, FILE_PATH, KEYDOUS, SECURITY, TIMEOUT_MS, cleanBody, fetchFile, rateLimit } from "./keydous.mjs";
 
-/* A visitor may make this many calls a minute (a page of pictures is 12 files). Kept per Worker instance: a best effort. */
-const PER_VISITOR = { lists: 120, files: 900, perMs: 60_000 };
-const BODY_LIMIT = 2048;
-const FILE_TRIES = 3;
-const RETRY_STEP_MS = 600;
-const RETRY_JITTER_MS = 400;   // spread the retries of a page of pictures, so they do not reach Keydous all at once again
-
-/* No shared limit on calls to Keydous at once (server.mjs has one): in a Worker, a request may not wake another one
-   waiting in a shared queue (the runtime cancels it as hung). Each call stands alone; Keydous's "busy" answers are retried. */
-const upstream = (url, init, timeout = TIMEOUT_MS) => fetch(url, {
-  ...init, signal: AbortSignal.timeout(timeout), headers: { ...init?.headers, "User-Agent": "nj81-config" },
+/* No limit on calls to Keydous at once (server.mjs has one): in a Worker a request may not wake another one waiting in a
+   shared queue (the runtime cancels it as hung). Each call stands alone; Keydous's "busy" answers are retried. */
+const upstream = (url, timeout = TIMEOUT_MS, init = {}) => fetch(url, {
+  ...init, signal: AbortSignal.timeout(timeout), headers: { ...init.headers, "User-Agent": "nj81-config" },
 });
-
-const visitors = new Map();   // address -> { lists, files, since }
-const allowed = (address, kind) => {
-  const now = Date.now();
-  let visitor = visitors.get(address);
-  if (!visitor || now - visitor.since > PER_VISITOR.perMs) {
-    visitor = { lists: 0, files: 0, since: now };
-    visitors.set(address, visitor);
-    for (const [key, old] of visitors) { if (now - old.since > PER_VISITOR.perMs) { visitors.delete(key); } }
-  }
-  visitor[kind] += 1;
-  return visitor[kind] <= PER_VISITOR[kind];
-};
+const allowed = rateLimit();   // per Worker instance: a best effort
 
 const answer = (status, body, headers = {}) => new Response(body, { status, headers: { ...SECURITY, ...headers } });
+const text = (status, message) => answer(status, message, { "Content-Type": "text/plain; charset=utf-8", "Cache-Control": "no-store" });
 const json = (status, message, headers = {}) => answer(status, JSON.stringify({ code: -1, err_message: message }), { "Content-Type": "application/json", ...headers });
-const FILE_HEADERS = { "Content-Type": "application/octet-stream", "Cache-Control": "public, max-age=86400, immutable" };
 
-/* A file is named by its md5 and never changes: kept in Cloudflare's cache (on a custom domain; a no-op on workers.dev)
-   and by browsers for a day. Keydous sometimes answers 400 / 5xx when asked many at once, or cuts a big GIF off: asked
-   again twice, a little later each time, and only a whole file is sent as one. */
-const file = async (request, md5, ctx) => {
-  const cache = globalThis.caches?.default;
-  const key = new Request(new URL(`/keydous/file/${md5}`, request.url).toString());
-  const kept = await cache?.match(key);
-  if (kept) { return answer(200, kept.body, FILE_HEADERS); }
-  const tries = [];   // what Keydous answered each time: sent back in X-Upstream and logged (Workers Logs)
-  for (let attempt = 0; attempt < FILE_TRIES; attempt += 1) {
-    if (attempt) { await new Promise((wake) => { setTimeout(wake, RETRY_STEP_MS * attempt + Math.random() * RETRY_JITTER_MS); }); }
-    const reply = await upstream(FILE_URL + md5, undefined, FILE_TIMEOUT_MS).catch((error) => { tries.push(error?.name ?? "error"); return null; });
-    if (!reply) { continue; }
-    const body = await reply.arrayBuffer().catch(() => null);
-    const size = Number(reply.headers.get("content-length"));
-    if (reply.ok && body?.byteLength && (!size || body.byteLength === size)) {
-      const response = answer(200, body, { ...FILE_HEADERS, "X-Upstream": [...tries, reply.status].join(",") });
-      if (cache) { ctx.waitUntil(cache.put(key, response.clone())); }
-      return response;
-    }
-    tries.push(reply.ok ? `cut:${body?.byteLength ?? 0}/${size || "?"}` : reply.status);
-  }
+const file = async (md5) => {
+  const { body, tries } = await fetchFile(md5, upstream);
+  if (body) { return answer(200, body, { ...FILE_HEADERS, "X-Upstream": tries.join(",") }); }
   console.warn(`file ${md5}: Keydous answered ${tries.join(", ")}`);
-  // never Keydous's own status: a 500 here would look like the Worker failing
   return answer(502, "", { "Content-Type": "text/plain; charset=utf-8", "Cache-Control": "no-store", "X-Upstream": tries.join(",") });
 };
 
 const list = async (request, call) => {
-  const text = await request.text();
-  if (text.length > BODY_LIMIT) { return json(413, "Too big"); }
+  if (Number(request.headers.get("content-length")) > BODY_LIMIT) { return json(400, "Bad request"); }
   let body;
-  try { body = cleanBody(text, call.fields); } catch (error) { return json(400, "Bad request"); }
-  const reply = await upstream(call.url, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
+  try { body = cleanBody(await request.text(), call.fields); } catch (error) { return json(400, "Bad request"); }
+  const reply = await upstream(call.url, TIMEOUT_MS, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
   if (!reply.ok) { console.warn(`${call.url}: Keydous answered ${reply.status}`); }
   return answer(reply.status, await reply.text(), { "Content-Type": reply.headers.get("content-type") ?? "application/json", "Cache-Control": "no-store" });
 };
 
-const keydous = async (request, path, ctx) => {
+const keydous = (request, path) => {
   if (path === "/keydous/ping") { return answer(204, null, { "Cache-Control": "no-store", "X-App": APP }); }
-  const md5 = /^\/keydous\/file\/([0-9a-f]{32})$/.exec(path)?.[1];
-  const visitor = request.headers.get("cf-connecting-ip") ?? "?";
-  if (!allowed(visitor, md5 ? "files" : "lists")) { return json(429, "Too many requests", { "Retry-After": "5" }); }
-  if (md5 && request.method === "GET") { return file(request, md5, ctx); }
+  const md5 = FILE_PATH.exec(path)?.[1];
+  if (!allowed(request.headers.get("cf-connecting-ip") ?? "?", md5 ? "files" : "lists")) { return json(429, "Too many requests", { "Retry-After": "5" }); }
+  if (md5 && request.method === "GET") { return file(md5); }
   const call = KEYDOUS[path];
-  if (!call || request.method !== "POST") { return answer(404, "Not found", { "Content-Type": "text/plain; charset=utf-8" }); }
-  return list(request, call);
+  return call && request.method === "POST" ? list(request, call) : text(404, "Not found");
 };
 
 export default {
-  async fetch(request, env, ctx) {
+  async fetch(request, env) {
     const path = new URL(request.url).pathname;
     if (!path.startsWith("/keydous/")) { return env.ASSETS.fetch(request); }
-    try { return await keydous(request, path, ctx); } catch (error) {
+    try { return await keydous(request, path); } catch (error) {
       console.error(`${path}: ${error?.name}: ${error?.message}`);
-      const timeout = error?.name === "TimeoutError";
-      return answer(timeout ? 504 : 502, timeout ? "Keydous did not answer" : "Error", { "Content-Type": "text/plain; charset=utf-8" });
+      return error?.name === "TimeoutError" ? text(504, "Keydous did not answer") : text(502, "Error");
     }
   },
 };

@@ -6,12 +6,11 @@ import { KEYDOUS, SECURITY } from "../keydous.mjs";
 
 const realFetch = globalThis.fetch;
 afterEach(() => { globalThis.fetch = realFetch; });
-const ctx = { waitUntil: () => {} };
 const env = { ASSETS: { fetch: async () => new Response("asset") } };
 let ip = 0;
 const call = (path, init = {}) => worker.fetch(new Request(`https://nj81.example${path}`, {
   ...init, headers: { "cf-connecting-ip": `10.0.0.${(ip += 1) % 250}`, ...init.headers },
-}), env, ctx);
+}), env);
 
 test("public/_headers sends the same security headers as SECURITY", () => {
   const sent = Object.fromEntries(readFileSync(new URL("../public/_headers", import.meta.url), "utf8").split("\n")
