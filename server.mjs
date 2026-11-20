@@ -12,7 +12,7 @@ import { brotliCompressSync, gzipSync, constants as zlib } from "node:zlib";
 import { APP, FILE_TIMEOUT_MS, FILE_URL, KEYDOUS, SECURITY, TIMEOUT_MS, cleanBody } from "./keydous.mjs";
 
 const ROOT = resolve(fileURLToPath(new URL("./public/", import.meta.url)));
-/* Nothing to configure. A host (Render, Railway, Fly, Heroku…) gives the port in PORT: then that port, on every interface,
+/* Nothing to configure. A Node host (Railway, Fly, Heroku…) gives the port in PORT: then that port, on every interface,
    as its router reaches the app from outside. Run by hand (npm start): http://localhost:8080, this computer only, or the
    next free port up to 8089 when another program holds 8080 (see start below). */
 const DEPLOYED = Boolean(process.env.PORT);
@@ -84,7 +84,7 @@ const upstream = async (url, init, gone, timeout = TIMEOUT_MS) => {
 const send = (response, status, body, headers = {}) => { response.writeHead(status, { ...SECURITY, ...headers }); response.end(body); };
 
 const keydous = async (request, response, path) => {
-  // behind a host's proxy (Render) the visitor's address is the first of X-Forwarded-For
+  // behind a host's proxy the visitor's address is the first of X-Forwarded-For
   const visitor = String(request.headers["x-forwarded-for"] ?? "").split(",")[0].trim() || request.socket.remoteAddress || "?";
   if (path === "/keydous/ping") { send(response, 204, undefined, { "Cache-Control": "no-store", "X-App": APP }); return; }
   const file = /^\/keydous\/file\/([0-9a-f]{32})$/.exec(path);
@@ -209,7 +209,6 @@ const start = async () => {
         console.warn(`To use :${PORT}, close that program (find it with the command below) and run npm start again.`);
         console.warn(whoHolds(PORT));
       }
-      keepAlive();
       return;
     } catch (error) {
       if (error.code !== "EADDRINUSE") { throw error; }
@@ -226,19 +225,3 @@ const start = async () => {
   }
 };
 start().catch((error) => { console.error(error.message); process.exit(1); });
-
-/* Keep-alive (as the slack-bot does): a free Render web service sleeps after 15 minutes without a visit, and the next visitor
-   then waits ~50 s. Every 10 minutes the server visits its own public address, which Render gives in RENDER_EXTERNAL_URL.
-   Elsewhere (no such variable) nothing happens. A sleeping service cannot wake itself: this keeps an awake one awake. */
-function keepAlive() {
-  const base = (process.env.RENDER_EXTERNAL_URL || "").replace(/\/+$/, "");
-  if (!base) { return; }
-  const ping = async () => {
-    try {
-      const answer = await fetch(`${base}/keydous/ping`, { signal: AbortSignal.timeout(30_000), headers: { "User-Agent": "nj81-config keep-alive" } });
-      if (answer.status !== 204) { console.warn(`keep-alive: ${base} answered ${answer.status}`); }
-    } catch (error) { console.warn(`keep-alive: ${error.message}`); }
-  };
-  setInterval(ping, 10 * 60_000).unref();
-  console.log(`keep-alive: ${base}/keydous/ping every 10 min`);
-}
