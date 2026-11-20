@@ -48,22 +48,23 @@ const file = async (request, md5, ctx) => {
   const key = new Request(new URL(`/keydous/file/${md5}`, request.url).toString());
   const kept = await cache?.match(key);
   if (kept) { return answer(200, kept.body, FILE_HEADERS); }
-  let status = 502;
+  const tries = [];   // what Keydous answered each time: sent back in X-Upstream and logged (Workers Logs)
   for (let attempt = 0; attempt < FILE_TRIES; attempt += 1) {
     if (attempt) { await new Promise((wake) => { setTimeout(wake, RETRY_STEP_MS * attempt); }); }
-    const reply = await upstream(FILE_URL + md5, undefined, FILE_TIMEOUT_MS).catch(() => null);
+    const reply = await upstream(FILE_URL + md5, undefined, FILE_TIMEOUT_MS).catch((error) => { tries.push(error?.name ?? "error"); return null; });
     if (!reply) { continue; }
-    status = reply.status;
     const body = await reply.arrayBuffer().catch(() => null);
     const size = Number(reply.headers.get("content-length"));
     if (reply.ok && body?.byteLength && (!size || body.byteLength === size)) {
-      const response = answer(200, body, FILE_HEADERS);
+      const response = answer(200, body, { ...FILE_HEADERS, "X-Upstream": [...tries, reply.status].join(",") });
       if (cache) { ctx.waitUntil(cache.put(key, response.clone())); }
       return response;
     }
-    if (reply.ok) { status = 502; }
+    tries.push(reply.ok ? `cut:${body?.byteLength ?? 0}/${size || "?"}` : reply.status);
   }
-  return answer(status, "", { "Content-Type": "text/plain; charset=utf-8", "Cache-Control": "no-store" });
+  console.warn(`file ${md5}: Keydous answered ${tries.join(", ")}`);
+  // never Keydous's own status: a 500 here would look like the Worker failing
+  return answer(502, "", { "Content-Type": "text/plain; charset=utf-8", "Cache-Control": "no-store", "X-Upstream": tries.join(",") });
 };
 
 const list = async (request, call) => {
@@ -72,6 +73,7 @@ const list = async (request, call) => {
   let body;
   try { body = cleanBody(text, call.fields); } catch (error) { return json(400, "Bad request"); }
   const reply = await upstream(call.url, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
+  if (!reply.ok) { console.warn(`${call.url}: Keydous answered ${reply.status}`); }
   return answer(reply.status, await reply.text(), { "Content-Type": reply.headers.get("content-type") ?? "application/json", "Cache-Control": "no-store" });
 };
 
@@ -91,6 +93,7 @@ export default {
     const path = new URL(request.url).pathname;
     if (!path.startsWith("/keydous/")) { return env.ASSETS.fetch(request); }
     try { return await keydous(request, path, ctx); } catch (error) {
+      console.error(`${path}: ${error?.name}: ${error?.message}`);
       const timeout = error?.name === "TimeoutError";
       return answer(timeout ? 504 : 502, timeout ? "Keydous did not answer" : "Error", { "Content-Type": "text/plain; charset=utf-8" });
     }

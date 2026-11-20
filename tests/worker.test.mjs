@@ -61,4 +61,16 @@ test("a cut-off file is asked for again and only a whole one is sent", async () 
   assert.equal(tries, 2);
   assert.deepEqual(new Uint8Array(await reply.arrayBuffer()), whole);
   assert.match(reply.headers.get("cache-control"), /immutable/);
+  assert.equal(reply.headers.get("x-upstream"), "cut:2/4,200");
+});
+
+test("when Keydous keeps failing the Worker answers 502 and says what Keydous answered", async () => {
+  globalThis.fetch = async () => new Response("busy", { status: 500 });
+  const warn = console.warn;
+  console.warn = () => {};
+  try {
+    const reply = await call(`/keydous/file/${"b".repeat(32)}`);
+    assert.equal(reply.status, 502);
+    assert.equal(reply.headers.get("x-upstream"), "500,500,500");
+  } finally { console.warn = warn; }
 });
