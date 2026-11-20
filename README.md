@@ -3,12 +3,12 @@
 Configure the **Keydous NJ81** keyboard from the browser over USB: lighting, key remaps, macros, the 160×80 screen and a
 library of shared pictures and settings. No driver to install.
 
-[![Live site](https://img.shields.io/badge/live-nj81--config.kenbtec4.workers.dev-f38020?logo=cloudflare&logoColor=white)](https://nj81-config.kenbtec4.workers.dev)
+[![Live site](https://img.shields.io/badge/live-nj81.ngohoanganhtuan.com-f38020?logo=cloudflare&logoColor=white)](https://nj81.ngohoanganhtuan.com)
 ![Chrome | Edge](https://img.shields.io/badge/browser-Chrome%20%7C%20Edge-4285f4?logo=googlechrome&logoColor=white)
 ![Node 20+](https://img.shields.io/badge/node-20%2B-339933?logo=node.js&logoColor=white)
 ![No dependencies](https://img.shields.io/badge/dependencies-none-lightgrey)
 
-**Live:** <https://nj81-config.kenbtec4.workers.dev> · Vietnamese and English · Unofficial, not affiliated with Keydous.
+**Live:** <https://nj81.ngohoanganhtuan.com> · Vietnamese and English · Unofficial, not affiliated with Keydous.
 
 ## Contents
 
@@ -86,12 +86,15 @@ From a computer:
 2. Try it locally: `npm run cf:dev` (http://localhost:8787).
 3. Deploy: `npm run cf:deploy`. It prints the address (`https://nj81-config.<your-subdomain>.workers.dev`).
 
+The site's own address, `nj81.ngohoanganhtuan.com`, is a custom domain on the Worker (**Settings → Domains & Routes → Add →
+Custom domain**); the `workers.dev` address keeps working too.
+
 The Worker reaches Keydous on its ports 3814 and 3816 (`allow_custom_ports`, on by default for the compatibility date in
 `wrangler.jsonc`). Failures show in the dashboard's **Observability** logs, and a failed picture answers 502 with
 `X-Upstream` listing what Keydous answered each try.
 
 Search engines get a full title and description, Open Graph / X cards with [`public/og.png`](public/og.png),
-JSON-LD, [`robots.txt`](public/robots.txt) and [`sitemap.xml`](public/sitemap.xml) (they name `nj81-config.kenbtec4.workers.dev`:
+JSON-LD, [`robots.txt`](public/robots.txt) and [`sitemap.xml`](public/sitemap.xml) (they name `nj81.ngohoanganhtuan.com`:
 change them for another address). To be found sooner, add the site in
 [Google Search Console](https://search.google.com/search-console) and submit `/sitemap.xml`.
 

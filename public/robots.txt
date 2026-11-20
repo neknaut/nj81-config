@@ -2,4 +2,4 @@ User-agent: *
 Allow: /
 Disallow: /keydous/
 
-Sitemap: https://nj81-config.kenbtec4.workers.dev/sitemap.xml
+Sitemap: https://nj81.ngohoanganhtuan.com/sitemap.xml
