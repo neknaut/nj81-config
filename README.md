@@ -88,6 +88,25 @@ change them for another address). To be found sooner, add the site in
 > A service created earlier as a **Static Site** cannot run `server.mjs`. Delete it and create a **Web Service** (or the
 > Blueprint) instead.
 
+### Cloudflare (free, never asleep)
+
+The same app runs on Cloudflare Workers with static assets: Cloudflare serves `public/` (with the security headers of
+[`public/_headers`](public/_headers)) and [`worker.mjs`](worker.mjs) answers the Library's `/keydous/*` calls, as
+`server.mjs` does. Free, no sleep and no instance hours; static files do not count against the Workers request limit.
+
+1. Log in once: `npx wrangler login`.
+2. Try it locally: `npm run cf:dev` (http://localhost:8787).
+3. Deploy: `npm run cf:deploy`. It prints the address (`https://nj81-config.<your-subdomain>.workers.dev`).
+
+Or connect the repository in the Cloudflare dashboard (**Workers & Pages → Create → Import a repository**) with the deploy
+command `npx wrangler deploy`: each push to `main` then deploys. [`wrangler.jsonc`](wrangler.jsonc) holds the settings.
+
+Check the **Library** tab after the first deploy. Keydous answers on ports 3814 and 3816; Workers keep a custom port
+(`allow_custom_ports`, on by default for this compatibility date) only when the host is not itself behind Cloudflare. If
+the Library stays empty, use Render instead.
+
+For search engines, change `nj81-config.onrender.com` in `public/index.html`, `robots.txt` and `sitemap.xml` to the new address.
+
 ### Other hosts
 
 Start it with `npm start` (or `node server.mjs`) behind HTTPS. It uses the port the host gives and needs no settings. The server sets its own security headers
@@ -116,12 +135,15 @@ reports the clear done (about 40 seconds).
 
 ```bash
 npm start     # run the app on http://localhost:8080
-npm test      # node --test: protocol, keys and macros, lighting, profiles, translations
+npm test      # node --test: protocol, keys and macros, lighting, profiles, translations, the Worker
+npm run cf:dev     # the Cloudflare version locally (npx wrangler dev)
 ```
 
 | Path | Contents |
 |---|---|
 | [`server.mjs`](server.mjs) | Static server (brotli/gzip, ETag so a repeat visit downloads only what changed), security headers, the Library's `/keydous/*` requests, keep-alive |
+| [`worker.mjs`](worker.mjs), [`wrangler.jsonc`](wrangler.jsonc), [`public/_headers`](public/_headers) | The same on Cloudflare Workers (Library calls in the Worker, `public/` served by Cloudflare) |
+| [`keydous.mjs`](keydous.mjs) | What both share: the Keydous addresses, the body checks, the security headers |
 | [`public/js/royuan.js`](public/js/royuan.js) | The NJ81 vendor protocol: identify, lighting, clock, screen, key map, Fn layer, macros |
 | [`public/js/app.js`](public/js/app.js) | Wires the page together: tabs, lighting, screen, profiles, loading |
 | [`public/js/keymap.js`](public/js/keymap.js), [`keys-ui.js`](public/js/keys-ui.js) | Key and macro encoding; the Keys and Macro tabs |

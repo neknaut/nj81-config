@@ -9,6 +9,7 @@ import { readFile, stat } from "node:fs/promises";
 import { extname, join, normalize, resolve, sep } from "node:path";
 import { fileURLToPath } from "node:url";
 import { brotliCompressSync, gzipSync, constants as zlib } from "node:zlib";
+import { APP, FILE_TIMEOUT_MS, FILE_URL, KEYDOUS, SECURITY, TIMEOUT_MS, cleanBody } from "./keydous.mjs";
 
 const ROOT = resolve(fileURLToPath(new URL("./public/", import.meta.url)));
 /* Nothing to configure. A host (Render, Railway, Fly, Heroku…) gives the port in PORT: then that port, on every interface,
@@ -17,28 +18,14 @@ const ROOT = resolve(fileURLToPath(new URL("./public/", import.meta.url)));
 const DEPLOYED = Boolean(process.env.PORT);
 const PORT = Number(process.env.PORT) || 8080;
 const HOST = DEPLOYED ? "0.0.0.0" : "localhost";
-const APP = "nj81-config";   // answered in X-App by /keydous/ping, so a second start can tell this server is already running
 const TYPES = {
   ".html": "text/html; charset=utf-8", ".js": "text/javascript; charset=utf-8", ".mjs": "text/javascript; charset=utf-8",
   ".css": "text/css; charset=utf-8", ".json": "application/json; charset=utf-8", ".svg": "image/svg+xml", ".png": "image/png",
   ".jpg": "image/jpeg", ".jpeg": "image/jpeg", ".gif": "image/gif", ".webp": "image/webp", ".ico": "image/x-icon", ".xml": "application/xml; charset=utf-8",
   ".woff2": "font/woff2", ".txt": "text/plain; charset=utf-8", ".md": "text/markdown; charset=utf-8",
 };
-const SECURITY = {
-  "X-Content-Type-Options": "nosniff",
-  "Referrer-Policy": "no-referrer",
-  "X-Frame-Options": "DENY",
-  "Permissions-Policy": "hid=(self), camera=(), microphone=(), geolocation=()",
-  "Content-Security-Policy": "default-src 'self'; img-src 'self' data: blob:; style-src 'self' https://fonts.googleapis.com; "
-    + "font-src https://fonts.gstatic.com; script-src 'self'; connect-src 'self' blob:; base-uri 'none'; form-action 'none'; frame-ancestors 'none'",
-};
 
 /* ---------- the Library's Keydous calls ---------- */
-const KEYDOUS = {
-  "/keydous/images": { url: "https://api3.rongyuan.tech:3816/api/v2/list", fields: { page: "int", per_page: "int", company: "str", order_by_date: "bool" } },
-  "/keydous/configs": { url: "https://api.rongyuan.tech:3814/v1/shared_config_list", fields: { rankType: "str", page: "int", company: "str", deviceType: "str", deviceGroup: "str" } },
-};
-const FILE_URL = "https://api3.rongyuan.tech:3816/download/bit_image_file/";
 const UPSTREAM_AT_ONCE = 4;   // calls to Keydous at the same time, for every visitor together: more and it answers "busy"
 /* A visitor may make this many calls a minute: lists are few; a page of pictures is 12 files, so files get more room
    (pages turned quickly must not run out and lose their pictures). */
@@ -57,8 +44,6 @@ const cacheFile = (md5, body) => {
     fileCacheBytes -= old.length;
   }
 };
-const TIMEOUT_MS = 20_000;
-const FILE_TIMEOUT_MS = 90_000;   // a big GIF (several MB) can take a while to come from Keydous
 
 /* Calls to Keydous wait their turn here. A visitor who has gone (the browser cancelled: another page, another tab) leaves
    the line at once, and a call already running for them is stopped: the next visitor's pictures are not held up by
@@ -91,20 +76,6 @@ const readBody = (request, limit = 2048) => new Promise((done, fail) => {
   request.on("end", () => done(Buffer.concat(parts).toString("utf8")));
   request.on("error", fail);
 });
-/* Only the fields the driver sends, with the right types: nothing else reaches Keydous. */
-const cleanBody = (text, fields) => {
-  const input = JSON.parse(text);
-  const out = {};
-  for (const [name, kind] of Object.entries(fields)) {
-    const v = input[name];
-    if (v === undefined) { continue; }
-    if (kind === "int" && Number.isInteger(v) && v >= 0 && v <= 100_000) { out[name] = v; }
-    else if (kind === "bool" && typeof v === "boolean") { out[name] = v; }
-    else if (kind === "str" && typeof v === "string" && v.length <= 64) { out[name] = v; }
-    else { throw new Error(`bad ${name}`); }
-  }
-  return out;
-};
 const upstream = async (url, init, gone, timeout = TIMEOUT_MS) => {
   await slot(gone);
   try { return await fetch(url, { ...init, signal: AbortSignal.any([gone, AbortSignal.timeout(timeout)]), headers: { ...init?.headers, "User-Agent": "nj81-config" } }); }
@@ -182,6 +153,7 @@ const server = createServer(async (request, response) => {
   try {
     const path = decodeURIComponent(new URL(request.url, "http://localhost").pathname);
     if (path.startsWith("/keydous/")) { await keydous(request, response, path); return; }
+    if (path === "/_headers") { send(response, 404, "Not found", { "Content-Type": "text/plain; charset=utf-8" }); return; }   // Cloudflare's config
     let file = normalize(join(ROOT, path));
     if (file !== ROOT && !file.startsWith(ROOT + sep)) { send(response, 403, "Forbidden"); return; }   // no ../ out of public/
     let info = await stat(file).catch(() => null);
