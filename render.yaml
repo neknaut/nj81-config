@@ -9,8 +9,7 @@ services:
     buildCommand: echo "no build"
     startCommand: node server.mjs
     healthCheckPath: /keydous/ping
-    # PORT comes from Render: the server listens on that port. No keep-alive: the free service sleeps when nobody uses it,
-    # so it spends free instance hours only while it is in use.
+    # PORT and RENDER_EXTERNAL_URL come from Render: the server listens on that port and pings that address to stay awake.
     envVars:
       - key: NODE_VERSION
         value: "22"

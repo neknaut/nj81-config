@@ -76,9 +76,9 @@ Deploy the whole app with **`server.mjs`**, not only the `public/` folder: the L
    `node server.mjs`, with no build step.
 2. That is all: Render provides HTTPS and the port, and the server picks them up by itself.
 
-Free instances sleep after 15 minutes without traffic, and the first visit after that waits about a minute while the
-service starts. The server does not ping itself to stay awake: Render's free plan has **750 instance hours per month for
-the whole workspace**, shared with any other free service there, and a sleeping service uses none of them.
+Free instances sleep after 15 minutes without traffic. The server pings its own `/keydous/ping` every 10 minutes to stay
+awake. Render's free plan has **750 instance hours per month for the whole workspace**: one always-on service uses about
+720, so do not keep two free services awake at once.
 
 Search engines get a full title and description, Open Graph / X cards with [`public/og.png`](public/og.png),
 JSON-LD, [`robots.txt`](public/robots.txt) and [`sitemap.xml`](public/sitemap.xml) (they name `nj81-config.onrender.com`:
@@ -121,7 +121,7 @@ npm test      # node --test: protocol, keys and macros, lighting, profiles, tran
 
 | Path | Contents |
 |---|---|
-| [`server.mjs`](server.mjs) | Static server (brotli/gzip, ETag so a repeat visit downloads only what changed), security headers, the Library's `/keydous/*` requests |
+| [`server.mjs`](server.mjs) | Static server (brotli/gzip, ETag so a repeat visit downloads only what changed), security headers, the Library's `/keydous/*` requests, keep-alive |
 | [`public/js/royuan.js`](public/js/royuan.js) | The NJ81 vendor protocol: identify, lighting, clock, screen, key map, Fn layer, macros |
 | [`public/js/app.js`](public/js/app.js) | Wires the page together: tabs, lighting, screen, profiles, loading |
 | [`public/js/keymap.js`](public/js/keymap.js), [`keys-ui.js`](public/js/keys-ui.js) | Key and macro encoding; the Keys and Macro tabs |
